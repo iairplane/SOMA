@@ -1,133 +1,135 @@
-import os
-import cv2
-import torch
-import numpy as np
+import base64
+import io
 import logging
-from PIL import Image
-from typing import Tuple, List, Optional
+from typing import Any, Tuple
 
-# 尝试导入 SAM3
-try:
-    from sam3.model_builder import build_sam3_image_model
-    from sam3.model.sam3_image_processor import Sam3Processor
-    SAM3_AVAILABLE = True
-except ImportError:
-    SAM3_AVAILABLE = False
-    logging.warning("[SOMA Tools] 未检测到 SAM3 库，视觉处理工具将不可用。")
+import numpy as np
+import requests
+from PIL import Image
+
+
+def _encode_png_b64(image: np.ndarray) -> str:
+    pil = Image.fromarray(image.astype(np.uint8)).convert("RGB")
+    buf = io.BytesIO()
+    pil.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _decode_png_b64(b64_str: str) -> np.ndarray:
+    raw = base64.b64decode(b64_str)
+    pil = Image.open(io.BytesIO(raw)).convert("RGB")
+    return np.array(pil)
+
+
+class Sam3HttpClient:
+    def __init__(self, base_url: str = "http://127.0.0.1:5001", timeout_s: float = 10.0):
+        self.base_url = base_url.rstrip("/")
+        self.timeout_s = timeout_s
+
+    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        url = f"{self.base_url}{path}"
+        resp = requests.post(url, json=payload, timeout=self.timeout_s)
+        resp.raise_for_status()
+        return resp.json()
+
+    def visual_overlay(
+        self,
+        image: np.ndarray,
+        *,
+        target_object: str,
+        color: Tuple[int, int, int] = (0, 255, 0),
+        alpha: float = 0.4,
+    ) -> np.ndarray:
+        out = self._post(
+            "/visual_overlay",
+            {
+                "image": _encode_png_b64(image),
+                "target_object": target_object,
+                "color": list(color),
+                "alpha": alpha,
+            },
+        )
+        if out.get("success") and out.get("image"):
+            return _decode_png_b64(out["image"])
+        return image
+
+    def remove_distractor(self, image: np.ndarray, *, object_to_remove: str) -> np.ndarray:
+        out = self._post(
+            "/remove_distractor",
+            {"image": _encode_png_b64(image), "object_to_remove": object_to_remove},
+        )
+        if out.get("success") and out.get("image"):
+            return _decode_png_b64(out["image"])
+        return image
+
+    def replace_texture(self, image: np.ndarray, *, target_object: str, texture_image: np.ndarray) -> np.ndarray:
+        out = self._post(
+            "/replace_texture",
+            {
+                "image": _encode_png_b64(image),
+                "target_object": target_object,
+                "texture_image": _encode_png_b64(texture_image),
+            },
+        )
+        if out.get("success") and out.get("image"):
+            return _decode_png_b64(out["image"])
+        return image
+
+    def replace_background(
+        self,
+        image: np.ndarray,
+        *,
+        region_prompt: str,
+        texture_image: np.ndarray,
+        alpha: float = 1.0,
+    ) -> np.ndarray:
+        out = self._post(
+            "/replace_background",
+            {
+                "image": _encode_png_b64(image),
+                "region_prompt": region_prompt,
+                "texture_image": _encode_png_b64(texture_image),
+                "alpha": alpha,
+            },
+        )
+        if out.get("success") and out.get("image"):
+            return _decode_png_b64(out["image"])
+        return image
+
 
 class MCPTools:
+    """SOMA 原子工具箱 (The Limbs)
+
+    说明：此版本不在本进程加载 SAM3，而是通过 HTTP 调用独立的 SAM3 服务。
+
+    Tool API:
+    - apply_visual_overlay(image, target, color)
+    - remove_distractor(image, distractor)
+    - replace_texture(image, target_object, texture_image)
+    - replace_background(image, region_prompt, texture_image)
     """
-    SOMA 原子工具箱 (The Limbs)
-    包含: SAM3 分割, Inpainting 擦除, Visual Prompting 高亮
-    """
-    def __init__(self, device: str = "cuda", sam3_checkpoint: str = "./sam3.pt"):
-        self.device = device
-        self.predictor = None
-        
-        if SAM3_AVAILABLE:
-            self._init_sam3(sam3_checkpoint)
 
-    def _init_sam3(self, checkpoint_path):
-        """初始化 SAM3 模型"""
-        try:
-            if not os.path.exists(checkpoint_path):
-                logging.warning(f"[SOMA Tools] SAM3 权重未找到: {checkpoint_path}")
-                return
-            
-            logging.info(f"[SOMA Tools] Loading SAM3 from {checkpoint_path}...")
-            model = build_sam3_image_model(
-                checkpoint_path=checkpoint_path,
-                load_from_HF=False,
-                device=self.device,
-                eval_mode=True,
-                enable_segmentation=True
-            )
-            self.predictor = Sam3Processor(model, device=self.device)
-            logging.info("[SOMA Tools] SAM3 Loaded.")
-        except Exception as e:
-            logging.error(f"[SOMA Tools] SAM3 Init Failed: {e}")
+    def __init__(self, sam3_base_url: str = "http://127.0.0.1:5001", timeout_s: float = 10.0):
+        self.client = Sam3HttpClient(base_url=sam3_base_url, timeout_s=timeout_s)
 
-    def _get_mask(self, image_pil: Image.Image, prompt: str) -> np.ndarray:
-        """核心原子操作: Text -> Binary Mask"""
-        if not self.predictor or not prompt:
-            return np.zeros((image_pil.height, image_pil.width), dtype=np.uint8)
-        
-        try:
-            inference_state = self.predictor.set_image(image_pil)
-            result = self.predictor.set_text_prompt(state=inference_state, prompt=prompt)
-            
-            scores = result["scores"].cpu().numpy()
-            masks = result["masks"].cpu().numpy()
-            
-            # 过滤低置信度
-            if len(scores) > 0:
-                best_idx = np.argmax(scores)
-                if scores[best_idx] > 0.35: # 阈值可调
-                    mask = masks[best_idx].squeeze()
-                    return (mask > 0).astype(np.uint8)
-        except Exception as e:
-            logging.error(f"SAM3 Segmentation Error ({prompt}): {e}")
-            
-        return np.zeros((image_pil.height, image_pil.width), dtype=np.uint8)
+    def apply_visual_overlay(
+        self, image: np.ndarray, target: str, color: Tuple[int, int, int] = (0, 255, 0)
+    ) -> np.ndarray:
+        return self.client.visual_overlay(image, target_object=target, color=color)
 
-    # ================= 工具 1: Paint-to-Action (物体换色/高亮) =================
-    def apply_visual_overlay(self, image: np.ndarray, target: str, color: Tuple[int,int,int] = (0, 255, 0)) -> np.ndarray:
-        """
-        在目标物体表面覆盖一层半透明颜色。
-        用于解决: Visual Bias (VLA 看不懂某种颜色的物体，强行改成它熟悉的颜色)
-        """
-        if not self.predictor: return image
-        
-        img_pil = Image.fromarray(image).convert("RGB")
-        mask = self._get_mask(img_pil, target)
-        
-        if not np.any(mask):
-            logging.warning(f"[Tool] 未找到目标: {target}，跳过高亮。")
-            return image
-
-        # 图像处理 (Alpha Blending)
-        image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        overlay = np.zeros_like(image_bgr)
-        overlay[mask == 1] = color # 填充颜色
-        
-        # 混合: original * 0.6 + overlay * 0.4
-        alpha = 0.4
-        output = cv2.addWeighted(overlay, alpha, image_bgr, 1 - alpha, 0, dtype=cv2.CV_8U)
-        
-        # 只替换 mask 区域，保持背景清晰
-        result = image_bgr.copy()
-        result[mask == 1] = output[mask == 1]
-        
-        return cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
-
-    # ================= 工具 2: Eraser (无关物体擦除) =================
     def remove_distractor(self, image: np.ndarray, distractor: str) -> np.ndarray:
-        """
-        利用 Inpainting 物理擦除干扰物。
-        用于解决: Causal Confusion (因果混淆，比如桌上的红块干扰了机器人)
-        """
-        if not self.predictor: return image
-        
-        img_pil = Image.fromarray(image).convert("RGB")
-        mask = self._get_mask(img_pil, distractor)
-        
-        if not np.any(mask):
-            return image
-            
-        # 1. 膨胀 Mask (Dilate): 这一步至关重要！
-        # 如果不膨胀，物体边缘会残留一圈“光晕”伪影，VLA 依然会把它当成物体。
-        kernel = np.ones((7, 7), np.uint8) # 7x7 核
-        mask_dilated = cv2.dilate(mask, kernel, iterations=2)
-        
-        # 2. Inpainting (Telea 算法)
-        image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        # radius=5, 使用 Navier-Stokes (NS) 或 Telea
-        inpainted = cv2.inpaint(image_bgr, mask_dilated, 5, cv2.INPAINT_TELEA)
-        
-        logging.info(f"[Tool] 已擦除干扰物: {distractor}")
-        return cv2.cvtColor(inpainted, cv2.COLOR_BGR2RGB)
+        return self.client.remove_distractor(image, object_to_remove=distractor)
 
-    # ================= 工具 3: Debug (保存中间结果) =================
+    def replace_texture(self, image: np.ndarray, target_object: str, texture_image: np.ndarray) -> np.ndarray:
+        return self.client.replace_texture(image, target_object=target_object, texture_image=texture_image)
+
+    def replace_background(
+        self, image: np.ndarray, region_prompt: str, texture_image: np.ndarray, alpha: float = 1.0
+    ) -> np.ndarray:
+        return self.client.replace_background(
+            image, region_prompt=region_prompt, texture_image=texture_image, alpha=alpha
+        )
+
     def save_debug(self, image: np.ndarray, step: int, suffix: str = ""):
-        path = f"debug_step_{step}_{suffix}.jpg"
-        cv2.imwrite(path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        path = f"debug_step_{step}_{suffix}.png"
+        Image.fromarray(image.astype(np.uint8)).save(path)
