@@ -15,7 +15,7 @@ python /home/lizhuoran/SOMA/src/sam3_service.py \
 curl http://127.0.0.1:5001/health | cat
 ```
 
-### 0.2 运行推理/评测入口 `lerobot_eval.py`
+### 0.2 运行推理/评测入口 `soma_eval.py`
 ```bash
 export SOMA_SAM3_URL=http://127.0.0.1:5001
 # 可选：启用 memory（如果你已有 memory 数据）
@@ -87,7 +87,7 @@ python /home/lizhuoran/SOMA/src/soma_eval.py \
   - 核心：
     - `orchestrate_perception(image, task_desc, rag_context, rag_hints)`：输出严格 JSON plan
     - `generate_failure_report(...)`：日志/复盘时的失败归因（给 logger 用）
-    - `generate_success_description(...)`：成功总结（可选）
+    - `generate_success_description(...)`：成功总结
 
 依赖环境变量：
 ```bash
