@@ -1,0 +1,58 @@
+{
+  "per_task": [
+    {
+      "group": "libero_soma",
+      "id": 0,
+      "metrics": {
+        "sum_rewards": [],
+        "max_rewards": [],
+        "successes": [
+          false
+        ],
+        "video_paths": [
+          "outputs/eval/2026-02-11/21-47-05_libero_smolvla/videos/libero_soma_0/eval_episode_0.mp4"
+        ],
+        "episode_media": [
+          {
+            "episode_ix": 0,
+            "success": false,
+            "video_path": "outputs/eval/2026-02-11/21-47-05_libero_smolvla/videos/libero_soma_0/eval_episode_0.mp4",
+            "frame_path": "outputs/eval/2026-02-11/21-47-05_libero_smolvla/videos/libero_soma_0/frame_finish/eval_episode_0_key.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "group": "libero_soma",
+      "id": 1,
+      "metrics": {
+        "sum_rewards": [],
+        "max_rewards": [],
+        "successes": [
+          false
+        ],
+        "video_paths": [
+          "outputs/eval/2026-02-11/21-47-05_libero_smolvla/videos/libero_soma_1/eval_episode_0.mp4"
+        ],
+        "episode_media": [
+          {
+            "episode_ix": 0,
+            "success": false,
+            "video_path": "outputs/eval/2026-02-11/21-47-05_libero_smolvla/videos/libero_soma_1/eval_episode_0.mp4",
+            "frame_path": "outputs/eval/2026-02-11/21-47-05_libero_smolvla/videos/libero_soma_1/frame_finish/eval_episode_0_key.jpg"
+          }
+        ]
+      }
+    }
+  ],
+  "per_group": {
+    "libero_soma": {
+      "avg_reward": 0.0,
+      "success_rate": 0.0
+    }
+  },
+  "overall": {
+    "avg_reward": 0.0,
+    "success_rate": 0.0
+  }
+}

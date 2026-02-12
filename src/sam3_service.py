@@ -31,7 +31,9 @@ import io
 import logging
 import os
 import sys
-from typing import Any, Dict, Tuple
+import cv2
+import torch
+from typing import Any, Dict, Tuple, Optional
 
 import numpy as np
 from flask import Flask, jsonify, request
@@ -39,9 +41,20 @@ from flask_cors import CORS
 from PIL import Image
 
 # SAM3 imports
-from sam3.model_builder import build_sam3_image_model
-from sam3.model.sam3_image_processor import Sam3Processor
+try:
+    from sam3.model_builder import build_sam3_image_model
+    from sam3.model.sam3_image_processor import Sam3Processor
+except ImportError:
+    print("Error: sam3 module not found.")
+    sys.exit(1)
 
+# SOMA VLM Client import
+try:
+    from soma_vlm import Qwen3VLAPIClient
+except ImportError:
+    print("Error: soma_vlm.py not found in current directory.")
+    sys.exit(1)
+    
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -52,7 +65,7 @@ app = Flask(__name__)
 CORS(app)
 
 sam3_predictor: Sam3Processor | None = None
-
+vlm_client: Qwen3VLAPIClient | None = None
 
 def _decode_image(data_url_or_b64: str) -> np.ndarray:
     if not data_url_or_b64:
@@ -97,7 +110,10 @@ def init_sam3_model(device: str, sam3_weight_path: str) -> bool:
 
 
 def _get_mask(image: np.ndarray, prompt: str, score_th: float = 0.25) -> Tuple[np.ndarray, float]:
-    global sam3_predictor
+    """
+    结合 VLM (引用自 soma_vlm) 和 SAM3 获取 Mask
+    """
+    global sam3_predictor, vlm_client
     if sam3_predictor is None:
         raise RuntimeError("SAM3 not initialized")
     if not prompt:
@@ -105,22 +121,62 @@ def _get_mask(image: np.ndarray, prompt: str, score_th: float = 0.25) -> Tuple[n
 
     pil = Image.fromarray(image.astype(np.uint8)).convert("RGB")
     state = sam3_predictor.set_image(pil)
+    
+    # --- 策略 A: 优先使用 VLM 检测 Box ---
+    if vlm_client:
+        try:
+            # 直接调用 soma_vlm 中的方法
+            bbox = vlm_client.detect_object(image, prompt) # [x1, y1, x2, y2]
+            print(f"VLM detected bbox: {bbox}")
+            if bbox:
+                logger.info(f"VLM detected box: {bbox}")
+                # 使用 VLM 框辅助筛选 SAM3 的结果 (这是最稳健的集成方式，不需要改 SAM3 源码)
+                result = sam3_predictor.set_text_prompt(state=state, prompt=prompt)
+                masks = result.get("masks", torch.tensor([])).detach().cpu().numpy()
+                scores = result.get("scores", torch.tensor([])).detach().cpu().numpy()
+                
+                if len(masks) > 0:
+                    best_iou = -1.0
+                    best_idx = -1
+                    box_area = (bbox[2]-bbox[0]) * (bbox[3]-bbox[1])
+                    
+                    for i, m in enumerate(masks):
+                        m_bool = m.squeeze() > 0
+                        if not np.any(m_bool): continue
+                        
+                        # 计算 Mask 的包围盒
+                        ys, xs = np.where(m_bool)
+                        mx1, mx2, my1, my2 = xs.min(), xs.max(), ys.min(), ys.max()
+                        
+                        # 计算交集
+                        ix1 = max(bbox[0], mx1); iy1 = max(bbox[1], my1)
+                        ix2 = min(bbox[2], mx2); iy2 = min(bbox[3], my2)
+                        inter = max(0, ix2-ix1) * max(0, iy2-iy1)
+                        
+                        # 简单的匹配度指标
+                        metric = inter / (box_area + 1e-6)
+                        if metric > best_iou:
+                            best_iou = metric
+                            best_idx = i
+                    
+                    if best_idx != -1 and best_iou > 0.1: # 至少有一定重叠
+                        return (masks[best_idx].squeeze() > 0).astype(np.uint8), float(scores[best_idx])
+        except Exception as e:
+            logger.warning(f"VLM detect failed, falling back to pure SAM3: {e}")
+
+    # --- 策略 B: 纯 SAM3 文本模式 (Fallback) ---
+    logger.info(f"Using SAM3 text prompt: {prompt}")
     result = sam3_predictor.set_text_prompt(state=state, prompt=prompt)
+    scores = result.get("scores", np.array([])).detach().cpu().numpy()
+    masks = result.get("masks", np.array([])).detach().cpu().numpy()
 
-    scores = result["scores"].detach().cpu().numpy() if "scores" in result else np.array([])
-    masks = result["masks"].detach().cpu().numpy() if "masks" in result else np.array([])
-
-    if len(scores) == 0 or len(masks) == 0:
-        return np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8), 0.0
-
+    if len(scores) == 0: return np.zeros(image.shape[:2], dtype=np.uint8), 0.0
+    
     best = int(np.argmax(scores))
-    score = float(scores[best])
-    if score < score_th:
-        return np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8), score
+    if scores[best] < score_th: return np.zeros(image.shape[:2], dtype=np.uint8), float(scores[best])
+    
+    return (masks[best].squeeze() > 0).astype(np.uint8), float(scores[best])
 
-    mask = masks[best].squeeze()
-    mask = (mask > 0).astype(np.uint8)
-    return mask, score
 
 
 def _bbox_from_mask(mask: np.ndarray) -> Tuple[int, int, int, int] | None:
@@ -145,7 +201,7 @@ def visual_overlay() -> Any:
         target = data.get("target_object") or data.get("prompt")
         color = data.get("color", [0, 255, 0])
         alpha = float(data.get("alpha", 0.4))
-
+        
         mask, score = _get_mask(img, target)
         if not np.any(mask):
             return jsonify({"success": False, "image": _encode_png_b64(img), "message": f"mask not found (score={score:.3f})"})
@@ -284,12 +340,22 @@ def main() -> None:
         type=str,
         default="/mnt/disk1/shared_data/lzy/models/sam/sam3.pt",
     )
+    parser.add_argument("--vlm_base_url", default="https://models.sjtu.edu.cn/api/v1")
+    parser.add_argument("--vlm_api_key", required=False, help="API Key for soma_vlm",default="sk-dJ9PDHKGeP7xfsO4Zv7jNw")
+    
     args = parser.parse_args()
 
     if not init_sam3_model(device=args.device, sam3_weight_path=args.sam3_weight_path):
         logger.error("SAM3 init failed; exiting")
         sys.exit(1)
 
+    global vlm_client
+    if args.vlm_api_key:
+        logger.info("Initializing SOMA VLM Client...")
+        vlm_client = Qwen3VLAPIClient(api_key=args.vlm_api_key, base_url=args.vlm_base_url)
+    else:
+        logger.warning("No VLM API Key. Advanced reasoning disabled.")
+        
     logger.info(f"Starting SOMA SAM3 service on {args.host}:{args.port}")
     app.run(host=args.host, port=args.port, threaded=True, debug=False)
 

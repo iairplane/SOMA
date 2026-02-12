@@ -1,0 +1,71 @@
+(define (problem LIBERO_Tabletop_Manipulation)
+  (:domain robosuite)
+  (:language Pick up the black bowl that is furthest from the robot base and place it on the plate)
+
+  (:regions
+    ;; 1. 最远区域 (靠近桌面后侧边缘)
+    (furthest_region
+        (:target main_table)
+        (:ranges (
+            (-0.25 0.20 -0.15 0.30)
+          )
+        )
+    )
+
+    ;; 2. 中间区域
+    (middle_region
+        (:target main_table)
+        (:ranges (
+            (-0.05 -0.05 0.05 0.05)
+          )
+        )
+    )
+
+    ;; 3. 最近区域 (靠近机器人底座)
+    (nearest_region
+        (:target main_table)
+        (:ranges (
+            (0.15 -0.15 0.25 -0.05)
+          )
+        )
+    )
+
+    ;; 4. 目标存放区 (盘子所在的预设位置)
+    (plate_storage_region
+        (:target main_table)
+        (:ranges (
+            (0.10 0.15 0.20 0.25)
+          )
+        )
+    )
+  )
+
+  (:fixtures
+    main_table - table
+  )
+
+  (:objects
+    ;; 核心：必须显式拆分实例名，否则逻辑判定无法区分哪个碗是“最远”的
+    akita_black_bowl_target akita_black_bowl_dist_1 akita_black_bowl_dist_2 - akita_black_bowl
+    plate_1 - plate
+  )
+
+  (:obj_of_interest
+    akita_black_bowl_target
+    plate_1
+  )
+
+  (:init
+    ;; 初始状态采样：将目标碗强制放在最远区
+    (On akita_black_bowl_target main_table_furthest_region)
+    (On akita_black_bowl_dist_1 main_table_middle_region)
+    (On akita_black_bowl_dist_2 main_table_nearest_region)
+    (On plate_1 main_table_plate_storage_region)
+  )
+
+  (:goal
+    ;; 判定成功：只有当“最远碗”被放到盘子上时，任务才算 Success
+    ;; 这会强制 SOMA 在失败时去思考：我是不是抓错碗了？
+    (And (On akita_black_bowl_target plate_1))
+  )
+)

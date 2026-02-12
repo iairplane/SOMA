@@ -1,0 +1,71 @@
+(define (problem LIBERO_Tabletop_Manipulation)
+  (:domain robosuite)
+  (:language Pick the central akita black bowl and place it on the plate)
+
+  (:regions
+    ;; 1. 目的地：盘子所在的区域
+    (plate_region
+        (:target main_table)
+        (:ranges (
+            (0.05 0.19 0.07 0.21)
+          )
+        )
+    )
+
+    ;; 2. 目标碗初始位置 (中心)
+    (target_bowl_region
+        (:target main_table)
+        (:ranges (
+            (-0.02 -0.02 0.02 0.02)
+          )
+        )
+    )
+
+    ;; 3. 干扰项 A 区域 (左侧紧贴)
+    (distractor_left_region
+        (:target main_table)
+        (:ranges (
+            (-0.15 -0.05 -0.10 0.05)
+          )
+        )
+    )
+
+    ;; 4. 干扰项 B 区域 (右前侧紧贴)
+    (distractor_right_region
+        (:target main_table)
+        (:ranges (
+            (0.10 -0.10 0.15 0.00)
+          )
+        )
+    )
+  )
+
+  (:fixtures
+    main_table - table
+    ;; 如果需要背景装饰，可以取消下面注释，但建议先保持最简以防报错
+    ;; wooden_cabinet_1 - wooden_cabinet
+  )
+
+  (:objects
+    ;; 核心：必须显式列出所有实例，Libero_Tabletop_Manipulation 才会加载它们
+    akita_black_bowl_1 akita_black_bowl_2 akita_black_bowl_3 - akita_black_bowl
+    plate_1 - plate
+  )
+
+  (:obj_of_interest
+    akita_black_bowl_1
+    plate_1
+  )
+
+  (:init
+    (On akita_black_bowl_1 main_table_target_bowl_region)
+    (On akita_black_bowl_2 main_table_distractor_left_region)
+    (On akita_black_bowl_3 main_table_distractor_right_region)
+    (On plate_1 main_table_plate_region)
+  )
+
+  (:goal
+    ;; 判定成功：只有 1 号碗（中间的）被放到盘子上才算成功
+    (And (On akita_black_bowl_1 plate_1))
+  )
+)

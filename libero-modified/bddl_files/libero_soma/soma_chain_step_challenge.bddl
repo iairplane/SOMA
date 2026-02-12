@@ -1,0 +1,79 @@
+(define (problem LIBERO_Floor_Manipulation)
+  (:domain robosuite)
+  (:language "Sort the items: tomato sauce to the left, popcorn to the basket, milk to the right.")
+
+  (:regions
+    ;; --- 1. 左侧目标区 (Pantry) ---
+    (pantry_region
+        (:target floor)
+        (:ranges (
+            (0.0 0.20 0.10 0.30) ; 桌子左上角
+          )
+        )
+    )
+    
+    ;; --- 2. 中间目标区 (Basket) ---
+    (contain_region
+        (:target basket_1) ; 篮子内部
+    )
+    
+    ;; --- 3. 右侧目标区 (Cooler) ---
+    (cooler_region
+        (:target floor)
+        (:ranges (
+            (0.0 -0.25 0.10 -0.15) ; 桌子右上角
+          )
+        )
+    )
+
+    ;; --- 初始生成区域 (分散放置) ---
+    (init_region_milk
+        (:target floor)
+        (:ranges ((-0.1 -0.15 0.0 -0.05)))
+    )
+    (init_region_popcorn
+        (:target floor)
+        (:ranges ((-0.1 0.1 0.0 0.2)))
+    )
+    (init_region_sauce
+        (:target floor)
+        (:ranges ((-0.2 0.0 -0.1 0.1)))
+    )
+  )
+
+  (:fixtures
+    floor - floor
+  )
+
+  (:objects
+    ;; === 严格使用截图中的合法物体 ===
+    milk_1 - milk
+    popcorn_1 - popcorn
+    tomato_sauce_1 - tomato_sauce
+    
+    basket_1 - basket
+  )
+
+  (:obj_of_interest
+    milk_1
+    popcorn_1
+    tomato_sauce_1
+    basket_1
+  )
+
+  (:init
+    (On milk_1 floor_init_region_milk)
+    (On popcorn_1 floor_init_region_popcorn)
+    (On tomato_sauce_1 floor_init_region_sauce)
+    (On basket_1 floor) ; 篮子在桌子正中间
+  )
+
+  (:goal
+    ;; 长程任务：三个物体必须全部归位
+    (And 
+        (On tomato_sauce_1 floor_pantry_region)
+        (In popcorn_1 basket_1_contain_region)
+        (On milk_1 floor_cooler_region)
+    )
+  )
+)

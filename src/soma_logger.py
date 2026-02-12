@@ -66,47 +66,29 @@ class ExperienceLogger:
             
         return frames
 
-    def _run_diagnosis(self, task: str, frames: List[Image.Image]) -> str:
-        """
-        [核心修复] 调用 VLM 生成诊断报告，并提取核心原因字符串。
-        """
-        if not self.vlm: 
-            return "Analysis unavailable (No VLM)."
-        
-        if not frames:
-            return "Analysis unavailable (No frames)."
-
-        # 1. 调用 VLM 的标准接口 (复用 soma_vlm.py 中的 generate_failure_report)
-        # 这会返回一个包含 intrinsic_analysis, mcp_remediation 的字典
+    def _run_failure_diagnosis(self, task: str, frames: List[Image.Image]) -> str:
+        """调用 VLM 生成失败诊断报告"""
+        if not self.vlm or not frames:
+            return "Analysis unavailable."
         try:
-            report = self.vlm.generate_failure_report(
-                images=frames,
-                task_prompt=task,
-                anchor_example=None # 未来可以扩展传入成功案例
-            )
-            
-            # 2. 解析结构化输出
-            # 目标格式: "Direct Cause: <cause>. Observation: <obs>"
+            report = self.vlm.generate_failure_report(images=frames, task_prompt=task)
             analysis = report.get("intrinsic_analysis", {})
-            direct_cause = analysis.get("direct_cause", "Unknown cause")
-            observation = analysis.get("observation", "")
-            
-            # 3. 提取 MCP 建议 (可选，存入 info 以便后续分析)
-            # mcp_suggestion = report.get("mcp_remediation", {})
-            
-            # 生成存入 MemoryBank 的简洁诊断字符串
-            diagnosis_str = f"{direct_cause}: {observation}"
-            
-            # 限制长度，防止污染检索展示
-            if len(diagnosis_str) > 200:
-                diagnosis_str = diagnosis_str[:197] + "..."
-                
-            return diagnosis_str
-
+            return f"{analysis.get('direct_cause', 'Unknown')}: {analysis.get('observation', '')}"
         except Exception as e:
-            logging.error(f"[Logger] VLM Diagnosis Error: {e}")
-            return "Diagnosis failed due to API error."
-
+            logging.error(f"[Logger] Failure Diagnosis Error: {e}")
+            return "Diagnosis failed."
+        
+    def _run_success_summary(self, task: str, frames: List[Image.Image]) -> str:
+        """调用 VLM 生成成功执行摘要"""
+        if not self.vlm or not frames:
+            return "Success confirmed."
+        try:
+            report = self.vlm.generate_success_description(images=frames, task_prompt=task)
+            return report.get("execution_summary", "Task completed successfully.")
+        except Exception as e:
+            logging.error(f"[Logger] Success Summary Error: {e}")
+            return "Success confirmed (Summary failed)."
+        
     def log_episode(self,
                     task_desc: str,
                     success: bool,
@@ -114,53 +96,37 @@ class ExperienceLogger:
                     keyframe_path: Union[str, Path],
                     frames: List[Image.Image] = None, 
                     additional_info: dict = None):
-        """
-        记录单个 Episode。
-        Args:
-            frames: 如果为 None，则自动从 video_path 读取。
-        """
+        """记录 Episode，支持同步诊断并入库"""
         try:
-            # 1. 准备图像资源
-            # 如果内存中没有帧，则从视频读取 (保证 Robustness)
-            if not frames or len(frames) == 0:
-                # 采样 5 帧用于诊断 (首、中、尾)
+            # 1. 资源准备 (自动从视频采样或使用传入帧)
+            if not frames:
                 diag_frames = self._extract_frames_from_video(video_path, num_frames=5)
-                # 取第 0 帧用于 RAG 索引
-                index_img = diag_frames[0] if diag_frames else None
             else:
-                index_img = frames[0]
-                # 如果传入帧太多，降采样到 5 帧以节省 Token
-                if len(frames) > 5:
-                    indices = np.linspace(0, len(frames)-1, 5, dtype=int)
-                    diag_frames = [frames[i] for i in indices]
-                else:
-                    diag_frames = frames
+                diag_frames = frames[:5] # 限制帧数节省 Token
+            
+            index_img = diag_frames[0] if diag_frames else None
+            
+            # 兜底：如果还是没图，尝试读取磁盘上的 keyframe_path
+            if index_img is None and Path(keyframe_path).exists():
+                index_img = Image.open(keyframe_path).convert("RGB")
+                diag_frames = [index_img]
 
-            # 如果还是没图 (视频读取失败)，尝试读 keyframe 文件
-            if index_img is None:
-                try:
-                    if Path(keyframe_path).exists():
-                        index_img = Image.open(keyframe_path).convert("RGB")
-                        diag_frames = [index_img]
-                    else:
-                        logging.warning(f"[Logger] 无图像数据，跳过记录: {task_desc}")
-                        return
-                except:
-                    return
+            if not index_img:
+                logging.warning(f"[Logger] 放弃记录：任务 {task_desc} 缺失图像数据")
+                return
 
-            # 2. 生成 Embedding (Mapping)
-            # 使用 index_img (首帧) 和 task_desc 生成索引向量
+            # 2. 生成 RAG 索引向量
             embedding = self.encoder.embed(index_img, task_desc)
             
-            # 3. 生成诊断 (Diagnosis)
-            diagnosis = ""
+            # 3. 分支诊断逻辑 (核心修复点：确保方法名匹配)
             if not success:
-                logging.info(f"[Logger] 正在诊断失败任务: {task_desc} ...")
-                # === 核心调用 ===
-                diagnosis = self._run_diagnosis(task_desc, diag_frames)
-                logging.info(f"[Logger] VLM 诊断结果: {diagnosis}")
-            
-            # 4. 存入 MemoryBank (Storage)
+                logging.info(f"[Logger] 正在诊断失败任务: {task_desc}")
+                diagnosis = self._run_failure_diagnosis(task_desc, diag_frames)
+            else:
+                # 成功时也可以存入摘要，帮助 RAG 检索正向经验
+                diagnosis = self._run_success_summary(task_desc, diag_frames)
+            print(f"📌 诊断结果: {diagnosis}")
+            # 4. 落地存储：调用 MemoryBank 写入磁盘
             self.memory.add_experience(
                 embedding=embedding,
                 task_desc=task_desc,
@@ -168,11 +134,12 @@ class ExperienceLogger:
                 video_path=video_path,
                 keyframe_path=keyframe_path,
                 diagnosis=diagnosis,
-                additional_info=additional_info
+                info=additional_info
             )
+            logging.info(f"✅ [Logger] 经验保存: {task_desc} (Success={success})")
             
         except Exception as e:
-            logging.error(f"[Logger] 记录过程发生未捕获异常: {e}", exc_info=True)
+            logging.error(f"[Logger] 关键错误：记录 Episode 失败 - {e}", exc_info=True)
 
 # ================= 单元测试 =================
 if __name__ == "__main__":

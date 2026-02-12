@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import numpy as np
-
+import os
+import tempfile
 
 def make_info_schema(
     *,
@@ -109,11 +110,31 @@ class MemoryBank:
 
     def _save_vectors(self, partition: str):
         vec_path = self.dirs[partition] / "vectors.npy"
-        temp_path = vec_path.with_suffix(".tmp.npy")
-        np.save(temp_path, self.index[partition]["vecs"])
-        if vec_path.exists():
-            vec_path.unlink()
-        temp_path.rename(vec_path)
+        
+        # [修复] 确保父目录存在
+        vec_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # [修复] 使用 PID 命名临时文件，防止并发冲突
+        # 使用 tempfile 模块在同一目录下创建临时文件
+        fd, temp_name = tempfile.mkstemp(
+            dir=str(vec_path.parent), 
+            prefix=f"vectors_{os.getpid()}_", 
+            suffix=".tmp.npy"
+        )
+        
+        try:
+            # 写入数据到临时文件
+            with os.fdopen(fd, 'wb') as f:
+                np.save(f, self.index[partition]["vecs"])
+            
+            # [修复] 原子性替换：在 Unix 上 replace 是原子的
+            # 这样即使程序在这一秒崩溃，旧的 vectors.npy 依然是完整的
+            os.replace(temp_name, str(vec_path))
+            
+        except Exception as e:
+            logging.error(f"[SOMA] 关键错误：无法保存向量库 {partition} - {e}")
+            if os.path.exists(temp_name):
+                os.remove(temp_name)
 
     def _append_metadata(self, partition: str, record: dict):
         meta_path = self.dirs[partition] / "metadata.jsonl"
@@ -162,7 +183,7 @@ class MemoryBank:
 
         self._append_metadata(partition, record)
         self._save_vectors(partition)
-
+    
         logging.info(f"[MemoryBank] 已存入 {partition} 经验: {task_desc[:30]}...")
 
     def get_best_task_plan(self, *, partition: str = "success") -> dict:
