@@ -15,7 +15,7 @@ python /home/lizhuoran/SOMA/src/sam3_service.py \
 curl http://127.0.0.1:5001/health | cat
 ```
 
-### 0.2 运行推理/评测入口 `soma_eval.py`
+### 0.2 运行推理/评测入口 `lerobot_eval.py`
 ```bash
 export SOMA_SAM3_URL=http://127.0.0.1:5001
 # 可选：启用 memory（如果你已有 memory 数据）
