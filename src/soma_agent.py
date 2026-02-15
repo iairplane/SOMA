@@ -30,6 +30,7 @@ class SOMAAgent:
             "memory_dir": "./soma_memory",
             "vlm_api_key": "sk-...",
             "vlm_base_url": "..."
+            "model_id": "xxx"  # 覆盖默认模型(qwen3vl)的可选项
         }
         """
         self.cfg = config
@@ -41,7 +42,8 @@ class SOMAAgent:
         # 1. 初始化大脑 (Brain)
         self.vlm = Qwen3VLAPIClient(
             api_key=config.get("vlm_api_key"),
-            base_url=config.get("vlm_base_url")
+            base_url=config.get("vlm_base_url"),
+            model_id=config.get("model_id")
         )
 
         # 2. 初始化地图 (Encoder)

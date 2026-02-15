@@ -14,20 +14,30 @@ python /home/lizhuoran/SOMA/src/sam3_service.py \
 ```bash
 curl http://127.0.0.1:5001/health | cat
 ```
+### 0.2 注册libero任务(`SOMA/libero-modified`)
+将对应 bddl_files 和 init_files 内的 libero_soma 任务添加到 libero 仓库中
+之后替换 benchmark 文件夹内容来注册 libero_soma 任务
+若需要新的 bddl 任务文件注册任务：
+```bash
+python sample_init_states.py 
+  --bddl_file path/to/bddl_files/libero_soma/soma_xxx_challenge.bddl 
+  --save_path path/to/init_files/libero_soma/soma_xxx_challenge.init
+```
 
-### 0.2 运行推理/评测入口 `soma_eval.py`
+
+### 0.3 运行推理/评测入口 `soma_eval.py`
 ```bash
 export SOMA_SAM3_URL=http://127.0.0.1:5001
 # 可选：启用 memory（如果你已有 memory 数据）
 export SOMA_ENABLE_MEMORY=0
 
-python /home/lizhuoran/SOMA/src/soma_eval.py \
-  --policy.path <你的policy路径或hub id> \
-  --env.type libero \
-  --eval.batch_size 1 \
-  --eval.n_episodes 1 \
-  --policy.device cuda \
-  --output_dir outputs/soma_eval_run
+python soma_eval.py   
+  --policy.path=path/to/pretrained_model   
+  --env.type=libero   
+  --env.task=libero_soma   
+  --eval.batch_size=1   
+  --eval.n_episodes=1 
+  --rename_map="{'agentview_image':'observation.images.empty_camera_0'}"
 ```
 
 ---
@@ -191,14 +201,14 @@ VLM 额外依赖：
 
 ## 5. 视觉 MCP tools 快速验证
 ```bash
-python /home/lizhuoran/SOMA/src/test_sam3_mcp_tools.py \
+python test_sam3_mcp_tools.py \
   --sam3_url http://127.0.0.1:5001 \
-  --image /home/lizhuoran/picture/with_tomato_sauce.png \
+  --image path/to/xxx.png \
   --target "ketchup" \
   --distractor "tomato sauce" \
   --floor_prompt "floor" \
-  --texture /home/lizhuoran/picture/tile_grigia_caldera_porcelain_floor.png \
-  --out_dir /home/lizhuoran/soma_mcp_test
+  --texture path/to/xxx_texture.png \
+  --out_dir path/to/output_dir
 ```
 
 输出目录包含：
@@ -210,7 +220,26 @@ python /home/lizhuoran/SOMA/src/test_sam3_mcp_tools.py \
 
 ---
 
-## 6. 常见问题
+## 6. 视觉 MCP tools 的 Attention-Score Heatmap 对比
+```bash
+python tool_attn_score_eval.py \  
+  --policy.path=path/to/pretrained_model \  
+  --env.type=libero   
+  --env.task=libero_soma  \ 
+  --eval.batch_size=1 \ 
+  --eval.n_episodes=1 \
+  --rename_map="{'agentview_image':'observation.images.empty_camera_0'}"
+```
+
+输出目录包含：output_dir/soma_debug
+- `attn_step_000_compare`
+- `attn_step_010_compare`
+- `attn_step_020_compare`
+- `attn_step_030_compare`
+...
+---
+
+## 7. 常见问题
 - **看不到输出图片**
   - 确认 `--out_dir` 指向的目录是否正确
   - `ls -lah <out_dir>`

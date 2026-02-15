@@ -363,7 +363,7 @@ def rollout(
                     )
                     
                     # [SOMA Debug] Save Modified
-                    if soma_debug_dir:
+                    if soma_debug_dir and flags.get("image_modified", False):
                         Image.fromarray(processed_frame).save(current_ep_debug_dir / f"step_{step:03d}_modified.jpg")
                     
                     # Write back visual overlay

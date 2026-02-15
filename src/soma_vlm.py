@@ -51,12 +51,13 @@ class Qwen3VLAPIClient:
     # 默认配置 (会被 init 参数覆盖)
     DEFAULT_API_KEY = os.environ.get("VLM_API_KEY", "sk-xxxxxxxxxxxx")
     DEFAULT_BASE_URL = os.environ.get("VLM_BASE_URL", "https://models.sjtu.edu.cn/api/v1")
-    # MODEL_ID = "qwen3vl"  # 根据你的 API 提供商调整
-    MODEL_ID = "qwen3-vl-32b-instruct"
+    MODEL_ID = "qwen3vl"  # 根据你的 API 提供商调整
+    # MODEL_ID = "qwen3-vl-32b-instruct"
 
-    def __init__(self, api_key: str = None, base_url: str = None):
+    def __init__(self, api_key: str = None, base_url: str = None, model_id: str = None):
         self.api_key = api_key or self.DEFAULT_API_KEY
         self.base_url = base_url or self.DEFAULT_BASE_URL
+        self.model_id = model_id or self.MODEL_ID
         self.client = None
         self._init_client()
 
@@ -107,7 +108,7 @@ class Qwen3VLAPIClient:
         if not self.client: return "{}"
         try:
             completion = self.client.chat.completions.create(
-                model=self.MODEL_ID, messages=messages, max_tokens=max_tokens, temperature=temperature
+                model=self.model_id, messages=messages, max_tokens=max_tokens, temperature=temperature
             )
             return completion.choices[0].message.content
         except Exception as e:

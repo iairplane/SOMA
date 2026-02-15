@@ -89,7 +89,7 @@ class PerceptionModule:
                 original_path = save_path.with_name(f"{save_path.stem}_original{save_path.suffix}")
                 cv2.imwrite(str(original_path), original_bgr)
                 
-            logging.info(f"[SOMA Debug] Saved frame to {save_path}")
+            # logging.info(f"[SOMA Debug] Saved frame to {save_path}")
         
         except Exception as e:
             logging.error(f"保存图片失败：{e}", exc_info=True)
@@ -231,12 +231,12 @@ class PerceptionModule:
 
                 elif tool_name == "key_step_retry":
                     control_flags["key_step_retry"] = True
-                    if "key_steps" in params:
-                        control_flags["key_steps"] = params.get("key_steps")
+                    if "key_steps" in tool_specific_params:
+                        control_flags["key_steps"] = tool_specific_params.get("key_steps")
 
                 elif tool_name == "task_decompose":
                     control_flags["task_decompose"] = True
-                    subtasks = params.get("subtasks")
+                    subtasks = tool_specific_params.get("subtasks")
                     if isinstance(subtasks, list) and subtasks:
                         control_flags["subtasks"] = subtasks
 
@@ -244,12 +244,15 @@ class PerceptionModule:
                 logging.error(f"[SOMA] Tool {tool_name} failed: {e}")
 
         # 4. 如果执行了视觉修改工具，则保存对比图
+        # if image_modified:
+        #     self._save_image(
+        #         result_rgb=processed_img,
+        #         save_path=save_base_path,
+        #         save_original=True,
+        #         original_image=image
+        #     )
         if image_modified:
-            self._save_image(
-                result_rgb=processed_img,
-                save_path=save_base_path,
-                save_original=True,
-                original_image=image
-            )
+            control_flags["image_modified"] = True
+            print("[SOMA] Image modified by visual tool.")
 
         return processed_img, refined_task_text, control_flags
