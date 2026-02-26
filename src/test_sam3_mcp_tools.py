@@ -1,19 +1,31 @@
 #!/usr/bin/env python
-"""最小可行测试：验证 SAM3 MCP tools (HTTP) 是否能与推理侧协作
+"""
+SOMA: Self-Organizing Memory Agent
+==================================
 
-目标：
-1) 确认 sam3_service 可用（/health）
-2) 依次调用 MCPTools:
+Description:
+------------
+Minimum Viable Test (MVT): Verifies whether the SAM3 MCP tools (HTTP client) 
+can successfully collaborate with the inference side.
+
+
+
+Objectives:
+1) Confirm the availability of the sam3_service (via the /health endpoint).
+2) Sequentially invoke MCPTools operations:
    - visual_overlay
    - remove_distractor
    - replace_texture
    - replace_background
-3) 把处理后的图转成 torch tensor，模拟喂给 policy 的 observation[visual_key]
+3) Convert the processed image into a PyTorch tensor to simulate feeding 
+   it to the policy's observation dictionary (e.g., observation[visual_key]).
 
-不依赖 Memory / VLM / 环境。
+This test is completely decoupled and does not rely on the MemoryBank, VLM, 
+or physical simulation environment.
 
-用法：
-python /home/lizhuoran/SOMA/src/test_sam3_mcp_tools.py \
+Usage:
+------
+python path/to/test_sam3_mcp_tools.py \
   --sam3_url http://127.0.0.1:5001 \
   --image /path/to/frame.png \
   --target "ketchup" \
@@ -32,7 +44,7 @@ import requests
 import torch
 from PIL import Image
 
-# local imports
+# Local imports
 from soma_tools import MCPTools
 
 
@@ -60,29 +72,29 @@ def main() -> int:
     img = _to_np_rgb(Path(args.image))
     _save(img, out_dir / "0_input.png")
 
-    # 1) health check
+    # 1) Health Check
     try:
         r = requests.get(f"{args.sam3_url.rstrip('/')}/health", timeout=3)
         r.raise_for_status()
         print("[OK] /health:", r.json())
     except Exception as e:
         print("[FAIL] sam3_service not reachable:", e)
-        print("你需要先启动: python /home/lizhuoran/SOMA/src/sam3_service.py --port 5001 --device cuda --sam3_weight_path ...")
+        print("You need to start the service first: python path/to/sam3_service.py --port 5001 --device cuda --sam3_weight_path ...")
         return 2
 
     tools = MCPTools(sam3_base_url=args.sam3_url)
 
-    # 2) overlay
+    # 2) Visual Overlay
     img_overlay = tools.apply_visual_overlay(img, args.target, color=(0, 255, 0))
     _save(img_overlay, out_dir / "1_overlay.png")
     print("[OK] visual_overlay saved")
 
-    # 3) remove distractor
+    # 3) Remove Distractor
     img_rm = tools.remove_distractor(img, args.distractor)
     _save(img_rm, out_dir / "2_remove_distractor.png")
     print("[OK] remove_distractor saved")
 
-    # 4) replace texture (requires texture)
+    # 4) Replace Texture (requires texture image)
     if args.texture:
         tex = _to_np_rgb(Path(args.texture))
         img_tex = tools.replace_texture(img, target_object=args.target, texture_image=tex)
@@ -91,7 +103,7 @@ def main() -> int:
     else:
         print("[SKIP] replace_texture (no --texture)")
 
-    # 5) replace background (requires texture)
+    # 5) Replace Background (requires texture image)
     if args.texture:
         tex = _to_np_rgb(Path(args.texture))
         img_bg = tools.replace_background(img, region_prompt=args.floor_prompt, texture_image=tex, alpha=1.0)
@@ -100,7 +112,7 @@ def main() -> int:
     else:
         print("[SKIP] replace_background (no --texture)")
 
-    # 6) simulate inference input tensor
+    # 6) Simulate Inference Input Tensor
     # Convert HWC uint8 -> BCHW float32 in [0,1]
     proc = img_overlay
     t = torch.from_numpy(proc).permute(2, 0, 1).float() / 255.0
@@ -115,5 +127,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

@@ -9,32 +9,19 @@ SOMA: Self-Organizing Memory Agent
 
 Description:
 ------------
-This module implements the evaluation pipeline for the SOMA-enhanced robotic policies. 
-It integrates the standard LeRobot rollout loop with SOMA's advanced cognitive framework, 
-facilitating real-time task decomposition, temporal retry mechanisms, and rollback 
-(Encore) strategies for anomalous state recovery. 
+Evaluate a policy on an environment using a Sequential Task Chain.
+(SOMA-Enhanced Version: Task Chaining + Robust Key Detection + Encore)
 
-# Example 1: Standard LeRobot Eval (SOMA disabled)
-python soma_eval.py   
-    --policy.path=/path/to/policy
-    --env.type=libero   
-    --env.task=libero_soma   
-    --eval.batch_size=1   
-    --eval.n_episodes=199 
-    --rename_map="{'agentview_image':'observation.images.empty_camera_0'}"
+This script is specifically designed to evaluate policies on long-horizon, 
+multi-stage tasks. Instead of relying on the VLM to dynamically decompose 
+tasks, it accepts a predefined sequence of subtasks (a `task_chain`). 
 
-# Example 2: SOMA Enabled with Custom VLM settings
-python soma_eval.py \
-    --enable_soma \
-    --vlm_api_key "sk-xxxxxx" \
-    --vlm_base_url "https://api.your-provider.com/v1" \
-    --vlm_model_id "your-model-id" \
-    --policy.path=/path/to/policy
-    --env.type=libero   
-    --env.task=libero_soma   
-    --eval.batch_size=1   
-    --eval.n_episodes=199 
-    --rename_map="{'agentview_image':'observation.images.empty_camera_0'}"
+Key Features:
+- Sequential Execution: Automatically transitions to the next subtask when 
+  the current subtask reaches its maximum step limit.
+- Reset/Encore Injection: Optionally triggers a physical arm reset or an 
+  Encore rollback maneuver between subtask transitions to re-center the 
+  agent and clear accumulated errors.
 """
 
 import concurrent.futures as cf
@@ -107,6 +94,7 @@ except ImportError:
 try:
     from soma_control_flow import RollbackState, TaskDecomposeState, KeyStepRetryState
 except ImportError:
+    # If the file is missing, log an error and set variables to None to prevent crashing
     logging.error("Missing soma_control_flow.py! Advanced control disabled.")
     RollbackState = None
     TaskDecomposeState = None
@@ -115,6 +103,45 @@ except ImportError:
 # ==============================================================================
 # Helper Functions
 # ==============================================================================
+def apply_hard_arm_reset(env, target_qpos=None):
+    """
+    Rigorous Reset: Only resets the robotic arm's joint positions (qpos), 
+    velocities (qvel), and control torques (ctrl).
+    Object positions in the environment remain unchanged.
+    """
+    if target_qpos is None:
+        # Reference standard init_qpos from MountedPanda.py
+        target_qpos = np.array([0, -1.61037389e-01, 0.00, -2.44459747e00, 0.00, 2.22675220e00, np.pi / 4])
+
+    # Loop through each sub-environment for VectorEnv
+    num_envs = getattr(env, "num_envs", 1)
+    
+    for i in range(num_envs):
+        # 1. Penetrate the Wrapper to get the actual underlying robosuite/LIBERO environment object
+        try:
+            # Depending on your environment nesting depth, you might need multiple .env calls
+            raw_env = env.envs[i].env.env 
+        except AttributeError:
+            raw_env = env # If it is not a VectorEnv
+            
+        # 2. Force modification of joint positions (qpos)
+        # _ref_joint_pos_indexes is the joint index automatically mapped by robosuite
+        raw_env.sim.data.qpos[raw_env.robots[0]._ref_joint_pos_indexes] = target_qpos
+        
+        # 3. Force clear joint velocities (qvel) to prevent explosions caused by inertia
+        raw_env.sim.data.qvel[raw_env.robots[0]._ref_joint_vel_indexes] = 0.0
+        
+        # 4. Clear the controller's current output torque (ctrl)
+        raw_env.sim.data.ctrl[raw_env.robots[0]._ref_joint_actuator_indexes] = 0.0
+        
+        # 5. Reset gripper state (force open)
+        raw_env.robots[0].gripper.set_gripper_pos([0.04, -0.04]) 
+        
+        # 6. Critical: Synchronize the physics engine state
+        raw_env.sim.forward()
+        
+    logging.warning("[PHYSICS] Arm has been hard-reset to initial pose. Objects stayed put.")
+
 def find_visual_key(observation: dict) -> Optional[str]:
     """
     Helper to robustly find the primary image key in observation.
@@ -157,6 +184,9 @@ def find_visual_key(observation: dict) -> Optional[str]:
                 
     return None
 
+# ==============================================================================
+# Helper Functions (Critical Fixes)
+# ==============================================================================
 def extract_task_from_env(env, env_idx=0) -> str:
     """
     Robust task description extraction.
@@ -226,19 +256,20 @@ def find_visual_obs(obs):
     return None, None
 
 # ==============================================================================
-# Rollout Logic
+# Rollout Logic (Enhanced for Sequential Task Chain)
 # ==============================================================================
 def rollout(
     env: gym.vector.VectorEnv,
     policy: PreTrainedPolicy,
     preprocessor: PolicyProcessorPipeline[dict[str, Any], dict[str, Any]],
     postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction],
-    soma_agent: Optional[SOMAAgent], # type: ignore
+    soma_agent: Optional[SOMAAgent],
     seeds: list[int] | None = None,
     return_observations: bool = False,
     render_callback: Callable[[gym.vector.VectorEnv], None] | None = None,
     *,
     task_prompt: str | None = None,
+    task_chain: list[dict] | None = None, # <--- [New Parameter] Task Chain
     # Compatibility Args
     memory_bank: Any = None,
     keyframes_dir_init: Path | None = None,
@@ -257,23 +288,26 @@ def rollout(
         render_callback(env)
 
     # === [CTRL 1] Initialize Advanced Controllers ===
-    # Enable advanced control as long as RollbackState is successfully imported
     use_advanced_ctrl = (RollbackState is not None)
-    rollback_ctrl = None
-    task_ctrl = None
-    retry_ctrl = None
+    rollback_ctrl = RollbackState() if use_advanced_ctrl else None
+    
+    # Disable VLM's automatic task decomposition because we are manually hardcoding the task chain
+    task_ctrl = None 
+    retry_ctrl = KeyStepRetryState() if use_advanced_ctrl else None
 
-    if use_advanced_ctrl:
-        rollback_ctrl = RollbackState()
-        task_ctrl = TaskDecomposeState()
-        retry_ctrl = KeyStepRetryState()
-        print(colored("[CTRL] Advanced Control ENABLED: Rollback + Task Decomposition + Key Step Retry", "green"))
+    # === [NEW] Task Chain State Machine ===
+    if not task_chain:
+        # If no chain is provided, treat it as a single-task episode
+        base_desc = task_prompt or extract_task_from_env(env, 0)
+        task_chain = [{"desc": base_desc, "max_steps": env.call("_max_episode_steps")[0]}]
 
-    # Get the initial task description
-    base_task_desc = task_prompt or extract_task_from_env(env, 0)
-    current_task_desc = base_task_desc
-    logging.info(f"Current Task: {current_task_desc}")
-
+    current_task_idx = 0
+    current_task_desc = task_chain[current_task_idx]["desc"]
+    subtask_max_steps = task_chain[current_task_idx]["max_steps"]
+    subtask_step_counter = 0 # Steps executed in the current subtask
+    
+    logging.info(f"Starting Task Chain [1/{len(task_chain)}]: '{current_task_desc}' (Max Steps: {subtask_max_steps})")
+    
     # Initial keyframe saving logic (Init Keyframe)
     if keyframes_dir_init:
         try:
@@ -290,8 +324,8 @@ def rollout(
                 Image.fromarray(frame_data).save(save_path)
         except Exception as e:
             logging.warning(f"Failed to save init keyframe: {e}")
-
-    # 2. [SOMA] Init
+            
+            
     rag_context = {}
     vis_key, vis_val = find_visual_obs(observation)
     if vis_key and soma_agent:
@@ -301,7 +335,6 @@ def rollout(
             if init_frame.shape[0] in [1, 3]: init_frame = init_frame.transpose(1, 2, 0)
             if init_frame.max() <= 1.05: init_frame = (init_frame * 255).astype(np.uint8)
             else: init_frame = init_frame.astype(np.uint8)
-            
             rag_context = soma_agent.init_episode(init_frame, current_task_desc)
         except Exception as e:
             logging.warning(f"[SOMA] Init Failed: {e}")
@@ -310,24 +343,19 @@ def rollout(
     all_observations, all_actions, all_rewards, all_successes, all_dones = [], [], [], [], []
     step = 0
     done = np.array([False] * env.num_envs)
-    max_steps = env.call("_max_episode_steps")[0]
-    progbar = trange(max_steps, desc=f"Rollout", disable=inside_slurm(), leave=False)
+    global_max_steps = env.call("_max_episode_steps")[0] # Absolute maximum steps allowed by the environment
+    progbar = trange(global_max_steps, desc=f"Rollout", disable=inside_slurm(), leave=False)
     
     # Action Accumulator (for Rollback calculation)
     action_dim = 7 
     accumulated_actions = np.zeros((env.num_envs, action_dim), dtype=np.float32)
 
-    while not np.all(done) and step < max_steps:
-        # Preprocess
+    while not np.all(done) and step < global_max_steps:
         observation = preprocess_observation(observation)
         if return_observations: all_observations.append(deepcopy(observation))
 
-        # === [CTRL 2] Dynamically update task description (Task Decomposition) ===
-        if use_advanced_ctrl:
-            # If there is a subtask queue, get the current subtask; otherwise use default
-            current_task_desc = task_ctrl.current_task(default_task=base_task_desc)
-
-        # [Feature] Save keyframe every 5 frames (Periodic Keyframe)
+        is_rolling_back = (use_advanced_ctrl and rollback_ctrl.active)
+        
         if keyframes_dir_periodic and (step % 5 == 0):
             try:
                 vis_key, vis_val = find_visual_obs(observation)
@@ -343,155 +371,104 @@ def rollout(
                     Image.fromarray(curr_frame).save(current_ep_keyframe_dir / f"step_{step:04d}.jpg")
             except Exception as e:
                 logging.warning(f"Failed to save periodic keyframe: {e}")
-
-
-        # [SOMA] Perception & Control Flag Parsing
-        # Note: Do not trigger SOMA perception during rollback
-        is_rolling_back = (use_advanced_ctrl and rollback_ctrl.active)
-        should_perceive = (step % 10 == 0) and (not is_rolling_back) and (soma_agent is not None)
-        
-        if should_perceive:
-            vis_key, vis_val = find_visual_obs(observation)
-            
-            if vis_key is not None:
-                try:
-                    # Prepare Image
-                    raw_tensor = vis_val[0] 
-                    if raw_tensor.shape[0] in [1, 3]: raw_np = raw_tensor.permute(1, 2, 0).cpu().numpy()
-                    else: raw_np = raw_tensor.cpu().numpy()
-                    if raw_np.max() <= 1.05: raw_np = (raw_np * 255).astype(np.uint8)
-                    else: raw_np = raw_np.astype(np.uint8)
-
-                    # [SOMA Debug] Save Original
-                    if soma_debug_dir:
-                        soma_debug_dir.mkdir(parents=True, exist_ok=True)
-                        current_ep_debug_dir = soma_debug_dir / f"episode_{n_episodes_rendered}"
-                        current_ep_debug_dir.mkdir(parents=True, exist_ok=True)
-                        Image.fromarray(raw_np).save(current_ep_debug_dir / f"step_{step:03d}_original.jpg")
-
-                    # Execute SOMA
-                    processed_frame, refined_task_from_vlm, flags = soma_agent.step(
-                        raw_np, current_task_desc, step, rag_context
-                    )
+                
+        # === [NEW] Task Switching Logic ===
+        # Only check if a task switch is needed when not actively rolling back
+        if not is_rolling_back:
+            # Check if the current subtask has timed out
+            if subtask_step_counter >= subtask_max_steps:
+                logging.warning(f"Subtask '{current_task_desc}' reached max steps ({subtask_max_steps}).")
+                
+                current_task_idx += 1
+                if current_task_idx < len(task_chain):
+                    # --- Prepare to enter the next subtask ---
+                    current_task_desc = task_chain[current_task_idx]["desc"]
+                    subtask_max_steps = task_chain[current_task_idx]["max_steps"]
+                    # subtask_step_counter = 0 # Counter reset happens below
                     
-                    # [SOMA Debug] Save Modified
-                    if soma_debug_dir and flags.get("image_modified", False):
-                        Image.fromarray(processed_frame).save(current_ep_debug_dir / f"step_{step:03d}_modified.jpg")
+                    logging.info(f"Switching to Task [{current_task_idx+1}/{len(task_chain)}]: '{current_task_desc}'")
                     
-                    # Write back visual overlay
-                    processed_tensor = torch.from_numpy(processed_frame).float() / 255.0
-                    if processed_tensor.shape[-1] in [1, 3]: processed_tensor = processed_tensor.permute(2, 0, 1)
-                    updated_batch = einops.repeat(processed_tensor, "c h w -> b c h w", b=env.num_envs).to(vis_val.device)
-                    observation[vis_key] = updated_batch
-                    
-                    # Update Prompt (if VLM provided a refined_task)
-                    if refined_task_from_vlm:
-                        # Override current task only if multi-stage task decomposition is NOT active
-                        # If task splitting is active, prioritize task_ctrl logic
-                        if not (use_advanced_ctrl and task_ctrl.subtasks):
-                            current_task_desc = refined_task_from_vlm
-
-                    # === [CTRL 3] Handle SOMA Flags ===
+                    # Trigger Encore (Rollback to initial position)
                     if use_advanced_ctrl:
-                        # A. Trigger Rollback (Encore)
-                        if flags.get("encore", False):
-                            rollback_ctrl.start_from_accumulated(
-                                accumulated_actions, 
-                                reverse_steps=40,   # Recommended value for CALVIN/LIBERO
-                                buffer_steps=20,    # Buffer steps
-                                reason="SOMA_Encore"
-                            )
-                        
-                        # B. Update Task Chain (Subtasks)
-                        if "subtasks" in flags:
-                            task_ctrl.update_from_control_flags(flags)
-                        
-                        # C. Key Step Retry Parameters
-                        if "key_steps" in flags:
-                            retry_ctrl.update_from_control_flags(flags)
-
-                except Exception as e:
-                    logging.error(f"[SOMA] Step Error: {e}", exc_info=True)
-
+                        logging.info("Triggering Full Rollback to starting position...")
+                        # Set reverse_steps equal to all steps taken so far, effectively returning to origin
+                        rollback_ctrl.start_from_accumulated(
+                            accumulated_actions, 
+                            reverse_steps=subtask_step_counter, # Reverse all steps
+                            buffer_steps=15, 
+                            reason="Task_Switch_Encore"
+                        )
+                    subtask_step_counter = 0
+                    accumulated_actions.fill(0.0) # Reset accumulator
+                else:
+                    # All subtasks have timed out; end the entire Episode
+                    logging.warning("All tasks in chain completed or timed out.")
+                    done = np.ones_like(done, dtype=bool)
+                    break
+        
+        # [SOMA] Perception (Maintains original logic, uses current_task_desc)
+ 
         # Inject Task & Preprocess
+        # Note: Must inject the current_task_desc maintained by the state machine
         observation = add_envs_task(env, observation, task_desc=current_task_desc)
-        if 'observation.robot_state' in observation and isinstance(observation['observation.robot_state'], dict):
-            robot_state = observation['observation.robot_state']
-            
-            # 1. Extract true tensor data (pos and qpos)
-            joints_pos = robot_state['joints']['pos']      # Shape e.g.: [1, 7]
-            gripper_qpos = robot_state['gripper']['qpos']  # Shape e.g.: [1, 2]
-            
-            # 2. Unify conversion to float32 data type commonly used by models
-            joints_pos = joints_pos.float()
-            gripper_qpos = gripper_qpos.float()
-            
-            # 3. Extract the first finger state of the gripper to represent the open/close degree, so 7 + 1 exactly = 8
-            # Using [..., 0:1] slice maintains dimensions, e.g., turning [1, 2] into [1, 1]
-            gripper_state = gripper_qpos[..., 0:1]
-            
-            # 4. Concatenate!
-            flat_state = torch.cat([joints_pos, gripper_state], dim=-1)
-            
-            # 5. Assign to the key expected by the model
-            observation['observation.state'] = flat_state
-            
-            # 6. Clean up old data to prevent preprocessor errors
-            del observation['observation.robot_state']
         observation = preprocessor(observation)
 
-        # [CTRL 4] Action Generation (Priority: Rollback > Policy)
+        # =========================================================
+        # Action Generation
+        # =========================================================
         action_numpy = None
         
         if use_advanced_ctrl and rollback_ctrl.active:
-            # Case A: Controller takeover (Reverse or Buffer)
-            # step_action will automatically handle Reverse -> Buffer -> Done state transitions
+            # Currently reversing
             action_numpy = rollback_ctrl.step_action(env.num_envs)
-            
-            # Important: Clear accumulated actions during rollback to prevent logic errors
-            accumulated_actions.fill(0.0)
-            
+            accumulated_actions.fill(0.0) # Do not accumulate during reverse phase
+            # if rollback_ctrl.need_hard_reset:
+            #     # Execute physical surgery: Reset arm state
+            #     apply_hard_arm_reset(env)
+            #     # Reset flag to prevent repeating reset in the next frame
+            #     rollback_ctrl.need_hard_reset = False
+                
+            #     # [Important] Tell the policy model: The environment has changed, please re-perceive
+            #     policy.reset() 
+                
+            #     # Skip the current frame's step, or proceed directly to the next loop iteration
+            #     obs, _, _, _, _ = env.step(np.zeros_like(action_numpy)) 
+            #     continue
         else:
-            # Case B: Normal Policy Execution
+            # Normal Execution
             with torch.inference_mode():
-                # print("Currently available observation keys:", observation.keys())
                 action = policy.select_action(observation)
             action = postprocessor(action)
             action_numpy = action.to("cpu").numpy()
             
-            # Accumulate actions (for future rollback calculation)
+            # Accumulate actions
             if action_numpy.shape[1] >= action_dim:
                 accumulated_actions += action_numpy[:, :action_dim]
+            
+            # Only increment the subtask counter during normal execution
+            subtask_step_counter += 1
 
         # Step Environment
         observation, reward, terminated, truncated, info = env.step(action_numpy)
         if render_callback is not None: render_callback(env)
 
-        # [CTRL 5] Post-Step Logic (Task Advance & Retry)
+        # =========================================================
+        # Post-Step Logic (Success Check)
+        # =========================================================
         if "final_info" in info:
             final_info = info["final_info"]
             successes = final_info["is_success"].tolist() if isinstance(final_info, dict) else [False]*env.num_envs
         else:
             successes = [False] * env.num_envs
         
-        # Simplified judgement: Any environment succeeding counts as success (Eval mode)
         is_success_any = any(successes)
 
-        if use_advanced_ctrl:
-            # A. Attempt to advance subtasks
-            task_ctrl.maybe_advance(success_any=is_success_any)
-
-            # B. Check if timeout requires forced retry
-            if retry_ctrl.should_trigger(step=step, success_any=is_success_any):
-                retry_ctrl.mark_triggered()
-                rollback_ctrl.start_from_accumulated(
-                    accumulated_actions, 
-                    reverse_steps=50, 
-                    reason="Timeout_Retry"
-                )
+        # What if the current subtask succeeds?
+        # If you want to immediately advance to the next task upon success, add logic here.
+        # By default, we continue attempting until max_steps is reached.
 
         done = terminated | truncated | done
-        if step + 1 == max_steps: done = np.ones_like(done, dtype=bool)
+        if step + 1 == global_max_steps: done = np.ones_like(done, dtype=bool)
 
         all_actions.append(torch.from_numpy(action_numpy))
         all_rewards.append(torch.from_numpy(reward))
@@ -510,12 +487,13 @@ def rollout(
         "success": torch.stack(all_successes, dim=1),
         "done": torch.stack(all_dones, dim=1),
     }
+
     if return_observations:
         stacked_observations = {}
         for key in all_observations[0]:
             stacked_observations[key] = torch.stack([obs[key] for obs in all_observations], dim=1)
         ret[OBS_STR] = stacked_observations
-
+        
     if hasattr(policy, "use_original_modules"): policy.use_original_modules()
     return ret
 
@@ -523,6 +501,7 @@ def rollout(
 # ==============================================================================
 # Eval Wrappers
 # ==============================================================================
+
 class TaskMetrics(TypedDict):
     sum_rewards: list[float]
     max_rewards: list[float]
@@ -537,13 +516,14 @@ def eval_policy(
     policy: PreTrainedPolicy,
     preprocessor: PolicyProcessorPipeline,
     postprocessor: PolicyProcessorPipeline,
-    soma_agent: Optional[SOMAAgent], # type: ignore
+    soma_agent: Optional[SOMAAgent],
     n_episodes: int,
     max_episodes_rendered: int = 0,
     videos_dir: Path | None = None,
     return_episode_data: bool = False,
     start_seed: int | None = None,
     task_prompt: str | None = None,
+    task_chain: list[dict] | None = None,
     **kwargs
 ) -> dict:
     
@@ -570,7 +550,6 @@ def eval_policy(
         (videos_dir / "frame_finish").mkdir(parents=True, exist_ok=True)
         (videos_dir / "keyframes").mkdir(parents=True, exist_ok=True)
         (videos_dir / "soma_debug").mkdir(parents=True, exist_ok=True)
-        # (videos_dir / "keyframes_periodic").mkdir(parents=True, exist_ok=True) # Added
 
     progbar = trange(n_batches, desc="Eval Batch", disable=inside_slurm())
     for batch_ix in progbar:
@@ -601,6 +580,7 @@ def eval_policy(
             task_prompt=task_prompt,
             keyframes_dir_init=(videos_dir / "keyframes_init") if videos_dir else None,
             # Pass parameters
+            task_chain=task_chain,
             soma_debug_dir=current_debug_dir,
             keyframes_dir_periodic=current_periodic_dir,
             n_episodes_rendered=n_episodes_rendered
@@ -645,11 +625,10 @@ def eval_policy(
         "episode_media": episode_media_records
     }
     return info
-
-def eval_one(env, policy, preprocessor, postprocessor, soma_agent, n_episodes, max_episodes_rendered, videos_dir, return_episode_data, start_seed, task_prompt, **kwargs):
+def eval_one(env, policy, preprocessor, postprocessor, soma_agent, n_episodes, max_episodes_rendered, videos_dir, return_episode_data, start_seed, task_prompt, task_chain=None, **kwargs):
     res = eval_policy(
         env, policy, preprocessor, postprocessor, soma_agent,
-        n_episodes, max_episodes_rendered, videos_dir, return_episode_data, start_seed, task_prompt
+        n_episodes, max_episodes_rendered, videos_dir, return_episode_data, start_seed, task_prompt, task_chain=task_chain
     )
     return TaskMetrics(
         sum_rewards=[], max_rewards=[], 
@@ -658,7 +637,7 @@ def eval_one(env, policy, preprocessor, postprocessor, soma_agent, n_episodes, m
         episode_media=res.get("episode_media", [])
     )
 
-def run_one(task_group, task_id, env, policy, preprocessor, postprocessor, soma_agent, n_episodes, max_episodes_rendered, videos_dir, return_episode_data, start_seed, **kwargs):
+def run_one(task_group, task_id, env, policy, preprocessor, postprocessor, soma_agent, n_episodes, max_episodes_rendered, videos_dir, return_episode_data, start_seed, task_chain=None, **kwargs):
     task_videos_dir = videos_dir / f"{task_group}_{task_id}" if videos_dir else None
     
     task_prompt = f"{task_group}_{task_id}"
@@ -667,7 +646,7 @@ def run_one(task_group, task_id, env, policy, preprocessor, postprocessor, soma_
 
     metrics = eval_one(
         env, policy, preprocessor, postprocessor, soma_agent,
-        n_episodes, max_episodes_rendered, task_videos_dir, return_episode_data, start_seed, task_prompt
+        n_episodes, max_episodes_rendered, task_videos_dir, return_episode_data, start_seed, task_prompt, task_chain=task_chain
     )
     
     if soma_agent:
@@ -680,7 +659,7 @@ def run_one(task_group, task_id, env, policy, preprocessor, postprocessor, soma_
             )
     return task_group, task_id, metrics
 
-def eval_policy_all(envs, policy, preprocessor, postprocessor, soma_agent, n_episodes, max_episodes_rendered=0, videos_dir=None, return_episode_data=False, start_seed=None, max_parallel_tasks=1, **kwargs):
+def eval_policy_all(envs, policy, preprocessor, postprocessor, soma_agent, n_episodes, max_episodes_rendered=0, videos_dir=None, return_episode_data=False, start_seed=None, max_parallel_tasks=1, task_chain=None, **kwargs):
     tasks = [(tg, tid, vec) for tg, group in envs.items() for tid, vec in group.items()]
     
     group_acc = defaultdict(lambda: defaultdict(list))
@@ -696,7 +675,7 @@ def eval_policy_all(envs, policy, preprocessor, postprocessor, soma_agent, n_epi
     runner = partial(
         run_one, policy=policy, preprocessor=preprocessor, postprocessor=postprocessor,
         soma_agent=soma_agent, n_episodes=n_episodes, max_episodes_rendered=max_episodes_rendered,
-        videos_dir=videos_dir, return_episode_data=return_episode_data, start_seed=start_seed
+        videos_dir=videos_dir, return_episode_data=return_episode_data, start_seed=start_seed, task_chain=task_chain, 
     )
 
     if max_parallel_tasks <= 1:
@@ -733,34 +712,29 @@ def eval_main(cfg: EvalPipelineConfig):
     device = get_safe_torch_device(cfg.policy.device)
     set_seed(cfg.seed)
 
-    soma_agent = None
+    TASK_CHAIN = [
+        {"desc": "Pick up the cream cheese and place it in the basket.", "max_steps": 280},
+        {"desc": "Pick up the milk and place it in the basket.", "max_steps": 280},
+        {"desc": "Pick up the chocolate pudding and place it on the plate.", "max_steps": 300},
+        # {"desc": "Pick up the cream cheese and place it in the basket.", "max_steps": 300}
+    ]
+    logging.info(f"Loaded Task Chain with {len(TASK_CHAIN)} subtasks.")
     
-    # Check if SOMA should be enabled via environment variable
-    enable_soma = os.environ.get("ENABLE_SOMA", "false").lower() == "true"
-
-    if enable_soma and SOMAAgent:
-        logging.info("Initializing SOMA Agent...")
-        # Retrieve VLM config from environment variables (set by our CLI parser)
-        vlm_api_key = os.environ.get("SOMA_VLM_API_KEY", "sk-c2649c021fd945c88ec8b11cdefebcb6")
-        vlm_base_url = os.environ.get("SOMA_VLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-        vlm_model_id = os.environ.get("SOMA_VLM_MODEL_ID", "qwen3-vl-32b-instruct")
-
-        soma_config = {
-            "sam3_base_url": "http://127.0.0.1:5001",  # Point to your sam3_service address
-            "memory_dir": str(Path(cfg.experience_dir) / "experience_db"),
-            "vlm_api_key": vlm_api_key,
-            "vlm_base_url": vlm_base_url,
-            "model_id": vlm_model_id
-        }
-        
-        try: 
-            soma_agent = SOMAAgent(soma_config)
-            logging.info(f"SOMA Agent initialized with model: {vlm_model_id}")
-        except Exception as e: 
-            logging.error(f"SOMA Init Failed: {e}")
-    else:
-        logging.info("SOMA Agent is DISABLED for this run.")
-
+    # 1. [SOMA] Init
+    logging.info("Initializing SOMA Agent...")
+    soma_config = {
+        "sam3_base_url": "http://127.0.0.1:5001",  # Point to your sam3_service address
+        "memory_dir": str(Path(cfg.experience_dir) / "experience_db"),
+        "vlm_api_key": "sk-xxxxx",
+        "vlm_base_url": "https://xxx.com/api/v1",
+        "model_id": "xxxxx"
+    }
+    soma_agent = None
+    if SOMAAgent:
+        try: soma_agent = SOMAAgent(soma_config)
+        except Exception as e: logging.error(f"SOMA Init Failed: {e}")
+    soma_agent = None    
+    
     # 2. Init LeRobot (Original Args)
     logging.info("Making environment.")
     envs = make_env(cfg.env, n_envs=cfg.eval.batch_size, use_async_envs=cfg.eval.use_async_envs)
@@ -789,7 +763,8 @@ def eval_main(cfg: EvalPipelineConfig):
         max_episodes_rendered=10,
         videos_dir=Path(cfg.output_dir) / "videos",
         start_seed=cfg.seed,
-        max_parallel_tasks=cfg.env.max_parallel_tasks
+        max_parallel_tasks=cfg.env.max_parallel_tasks,
+        task_chain=TASK_CHAIN 
     )
     
     if soma_agent is not None:
@@ -799,33 +774,5 @@ def eval_main(cfg: EvalPipelineConfig):
     with open(Path(cfg.output_dir) / "eval_info.json", "w") as f:
         json.dump(info, f, indent=2)
 
-
 if __name__ == "__main__":
-    import argparse
-    import sys
-    
-    # 1. First, parse out our custom SOMA arguments
-    custom_parser = argparse.ArgumentParser(add_help=False)
-    
-    # SOMA Enable Flag
-    custom_parser.add_argument("--enable_soma", action="store_true", help="Enable the SOMA Agent")
-    
-    # VLM Config Arguments
-    custom_parser.add_argument("--vlm_api_key", type=str, default="", help="API Key for the VLM")
-    custom_parser.add_argument("--vlm_base_url", type=str, default="", help="Base URL for the VLM API")
-    custom_parser.add_argument("--vlm_model_id", type=str, default="", help="Model ID for the VLM")
-    
-    custom_args, remaining_argv = custom_parser.parse_known_args()
-    
-    # 2. Inject these parameters into environment variables so deep functions can access them
-    if custom_args.enable_soma: os.environ["ENABLE_SOMA"] = "true"
-    if custom_args.vlm_api_key: os.environ["SOMA_VLM_API_KEY"] = custom_args.vlm_api_key
-    if custom_args.vlm_base_url: os.environ["SOMA_VLM_BASE_URL"] = custom_args.vlm_base_url
-    if custom_args.vlm_model_id: os.environ["SOMA_VLM_MODEL_ID"] = custom_args.vlm_model_id
-    
-    # 3. Overwrite sys.argv to remove our custom arguments. 
-    # This prevents LeRobot's strict Tyro/Draccus configuration parser from throwing an "Unrecognized argument" error.
-    sys.argv = [sys.argv[0]] + remaining_argv
-
-    # 4. Trigger the standard LeRobot entry point
     eval_main()

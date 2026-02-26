@@ -1,3 +1,26 @@
+"""
+SOMA: Self-Organizing Memory Agent
+==================================
+
+Description:
+------------
+This module implements the Vision-Language Model (VLM) API Client, which acts 
+as the 'Brain' of the SOMA framework. It is responsible for high-level visual 
+reasoning, task decomposition, semantic failure diagnosis, and zero-shot object 
+bounding box detection.
+
+
+
+Key Features:
+- Perception Orchestration: Evaluates the current scene against Retrieval-Augmented 
+  Generation (RAG) hints and outputs a structured tool-chain plan (e.g., identifying 
+  distractors or suggesting visual overlays).
+- Experience Summarization: Generates structured root-cause analysis reports for 
+  failed episodes and execution summaries for successful ones.
+- Modality Handling: Robustly encodes inputs from various formats (NumPy arrays, 
+  PIL Images, or file paths) into base64 Data URLs for API transmission.
+"""
+
 import base64
 import io
 import json
@@ -9,21 +32,21 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 from PIL import Image
 
-# 尝试导入 OpenAI 库
+# Attempt to import the OpenAI library
 try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None
 
 def _extract_json(text: str) -> dict | None:
-    """从大模型输出中提取 JSON 块"""
+    """Extract a JSON block from the Large Language Model's output string."""
     try:
-        # 尝试直接解析
+        # Attempt direct parsing
         return json.loads(text)
     except Exception:
         pass
 
-    # 尝试提取 Markdown 代码块
+    # Attempt to extract from Markdown code blocks
     try:
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
@@ -33,7 +56,7 @@ def _extract_json(text: str) -> dict | None:
     except Exception:
         pass
 
-    # 尝试查找最外层大括号
+    # Attempt to find the outermost curly braces
     start = text.find("{")
     end = text.rfind("}")
     if 0 <= start < end:
@@ -46,13 +69,13 @@ def _extract_json(text: str) -> dict | None:
 
 class Qwen3VLAPIClient:
     """
-    SOMA 大脑：负责与 VLM (Qwen3-VL/GPT-4o) 进行交互。
+    SOMA Brain: Responsible for interacting with the Vision-Language Model (e.g., Qwen3-VL / GPT-4o).
     """
-    # 默认配置 (会被 init 参数覆盖)
-    DEFAULT_API_KEY = os.environ.get("VLM_API_KEY", "sk-xxxxxxxxxxxx")
-    DEFAULT_BASE_URL = os.environ.get("VLM_BASE_URL", "https://models.sjtu.edu.cn/api/v1")
-    MODEL_ID = "qwen3vl"  # 根据你的 API 提供商调整
-    # MODEL_ID = "qwen3-vl-32b-instruct"
+    # Default configuration (will be overridden by init parameters)
+    DEFAULT_API_KEY = os.environ.get("VLM_API_KEY", "sk-c2649c021fd945c88ec8b11cdefebcb6")
+    DEFAULT_BASE_URL = os.environ.get("VLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    # MODEL_ID = "qwen3vl"  # Adjust according to your API provider
+    MODEL_ID = "qwen3-vl-32b-instruct"
 
     def __init__(self, api_key: str = None, base_url: str = None, model_id: str = None):
         self.api_key = api_key or self.DEFAULT_API_KEY
@@ -71,10 +94,10 @@ class Qwen3VLAPIClient:
             logging.error(f"[SOMA VLM] Init failed: {e}")
 
     def _encode_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> str:
-        """支持 Numpy/PIL/Path 转 Base64 Data URL"""
+        """Supports converting Numpy/PIL/Path to Base64 Data URL"""
         try:
             pil_img = None
-            # 1. 处理 Numpy 数组 (H, W, C)
+            # 1. Process Numpy array (H, W, C)
             if isinstance(image, np.ndarray):
                 if image.dtype != np.uint8:
                     if image.max() <= 1.0:
@@ -82,10 +105,10 @@ class Qwen3VLAPIClient:
                     else:
                         image = image.astype(np.uint8)
                 pil_img = Image.fromarray(image).convert("RGB")
-            # 2. 处理 PIL Image
+            # 2. Process PIL Image
             elif isinstance(image, Image.Image):
                 pil_img = image.convert("RGB")
-            # 3. 处理路径字符串
+            # 3. Process file path string
             elif isinstance(image, (str, Path)):
                 path_str = str(image)
                 if path_str.startswith("data:image"): return path_str
@@ -98,7 +121,7 @@ class Qwen3VLAPIClient:
                 b64_data = base64.b64encode(buf.getvalue()).decode("utf-8")
                 return f"data:image/png;base64,{b64_data}"
 
-            raise ValueError(f"不支持的图像类型: {type(image)}")
+            raise ValueError(f"Unsupported image type: {type(image)}")
         except Exception as e:
             logging.error(f"Image encoding failed: {e}")
             return ""
@@ -115,7 +138,7 @@ class Qwen3VLAPIClient:
             logging.error(f"[SOMA VLM] API Generation Error: {e}")
             return "{}"
 
-    # === 感知编排 (Perception) ===
+    # === Perception Orchestration ===
     def orchestrate_perception(self, image, task_desc, rag_context="", rag_hints=None) -> dict:
         b64_img = self._encode_image(image)
         if not b64_img: return {}
@@ -129,8 +152,8 @@ class Qwen3VLAPIClient:
             "You are the visual perception cortex of a robot manipulation system (SOMA).\n"
             "Goal: Preprocess input image and task prompt to help robotic policy.\n"
             "TOOLS:\n"
-            "1. 'visual_overlay': Highlight objects (e.g. 'red cup'). Params: target_object\n"
-            "2. 'remove_distractor': Remove confusing objects. Params: object_to_remove\n"
+            "1. 'remove_distractor': Remove ALL confusing objects/distractors. Params: objects_to_remove (List[str])\n"
+            "2. 'visual_overlay': Highlight objects (e.g. 'red cup'). Params: target_object\n"
             "3. 'replace_texture': Replace object texture from success memory. Params: target_object, source='rag_success'\n"
             "4. 'replace_background': Replace background. Params: region_prompt, source='rag_success'\n"
             "5. 'key_step_retry': Flag to trigger key step retry in policy. Params: key_steps (optional list of steps)\n"
@@ -141,13 +164,14 @@ class Qwen3VLAPIClient:
             "1. Use 'visual_overlay' if you identify key objects. Use 'remove_distractor' if there are misleading elements. Use 'replace_texture' if success memory has better visual features. Use 'replace_background' if the background is noisy. Use 'key_step_retry' if key steps need to be retried. Use 'task_decompose' if the task should be broken down into subtasks. Use 'encore' if you want to refine the task description without modifying the image. Always provide reasoning in the output.\n"
             "2. RAG Context and Hints can guide your decision. For example, if success memory has clear object texture but failure doesn't, consider using 'replace_texture' to enhance the current image.\n"
             "3. If the image is already clear and well-aligned with the task, you can choose to do no modification but still provide a refined task description.\n"
-            "4. If use visual_overlay, replace the origin object description in refined_task with the highlighted version (e.g. 'cup' -> 'highlighted green cup') to help downstream policy attend to it. We use Green highlight by default.\n"
+            "4. If use visual_overlay, replace the origin object description in refined_task with the highlighted version (e.g. 'cup' -> 'green highlighted cup') to help downstream policy attend to it. We use Green highlight by default. If use else tools, do NOT output 'highlighted' word in the task description.\n"
             "5. You CAN and SHOULD combine tools. For example, use 'remove_distractor' to clear vision AND 'visual_overlay' to guide the policy. The policy will focus on the 'refined_task' after all tools are applied.\n"
-            "6. You SHOULD give more detailed object descriptions of visual_overlay and remove_distractor in params to help the vision module execute them accurately. Like 'visual_overlay': {'target_object': 'the green cup between the book and the plate'}, 'remove_distractor': {'object_to_remove': 'the red cup which is the furthest from the plate'}.\n"
+            "6. You SHOULD give more detailed object descriptions of visual_overlay and remove_distractor in params to help the vision module execute them accurately. E.g., 'visual_overlay': {'target_object': 'the green cup'}, 'remove_distractor': {'objects_to_remove': ['the red cup on the left', 'the red cup on the right']}.\n"
             "7. If visual_overlay and remove_distractor are both triggered, execute visual_overlay first to ensure the overlay is not removed by remove_distractor.\n"
             "8. Always keep the refined_task concise and focused on the main manipulation goal. If the original task is 'Pick up the red cup and place it on the plate', a good refined_task could be 'Pick up the highlighted green cup and place it on the plate', NOT 'Pick up the red cup and place it on the plate while ignoring the blue book and the yellow bowl'."
             "9. If the background is too noisy and hinders object recognition, consider using 'replace_background' to simplify the scene."
             "10. If the original task description is noisy or ambiguous, refine it to be clearer and more specific."
+            "11. CRITICAL: If there are multiple distractors of the same type (e.g. multiple wrong bowls), you MUST list EACH of them individually in the 'objects_to_remove' list. Do NOT use a single generic phrase like 'all red bowls'. Instead, use specific descriptions for each one so the vision system can target them precisely (e.g. ['red bowl on top left', 'red bowl on bottom right'])."
         )
         user_prompt = f"Current Task: {task_desc}\nContext: {rag_context}\nHints: {hints_str}\nAnalyze image. Do we need intervention?"
         messages = [
@@ -156,9 +180,9 @@ class Qwen3VLAPIClient:
         ]
         return _extract_json(self._generate(messages)) or {}
 
-    # === 失败报告生成 (Logger 调用) ===
+    # === Failure Report Generation (Called by Logger) ===
     def generate_failure_report(self, images: list, task_prompt: str, anchor_example: dict = None) -> dict:
-        """生成失败原因分析报告"""
+        """Generate a root-cause analysis report for a failed episode"""
         valid_imgs = [self._encode_image(img) for img in images if img]
         valid_imgs = [img for img in valid_imgs if img] # filter empty
         
@@ -187,9 +211,9 @@ class Qwen3VLAPIClient:
         ]
         return _extract_json(self._generate(messages)) or {}
 
-    # === 成功描述生成 (Logger 调用) ===
+    # === Success Description Generation (Called by Logger) ===
     def generate_success_description(self, images: list, task_prompt: str) -> dict:
-        """生成成功执行摘要"""
+        """Generate an execution summary for a successful episode"""
         valid_imgs = [self._encode_image(img) for img in images if img]
         valid_imgs = [img for img in valid_imgs if img]
         
@@ -212,15 +236,15 @@ class Qwen3VLAPIClient:
         ]
         return _extract_json(self._generate(messages)) or {}
     
-    # === 物体检测 (SAM3 Service 调用) ===
+    # === Object Detection (Supports SAM3 Service) ===
     def detect_object(self, image: Union[str, Path, Image.Image, np.ndarray], prompt: str) -> Optional[List[int]]:
         """
-        请求 VLM 返回目标物体的 Bounding Box [x1, y1, x2, y2]
+        Request the VLM to return the Bounding Box [x1, y1, x2, y2] of the target object.
         """
         b64_img = self._encode_image(image)
         if not b64_img: return None
 
-        # 针对 Qwen-VL 等模型的检测提示词
+        # Detection prompt tailored for models like Qwen-VL
         system_prompt = "You are a robotic vision assistant. Output the bounding box of the target object."
         user_prompt = (
             f"Detect the bounding box for: '{prompt}'. "
@@ -239,23 +263,23 @@ class Qwen3VLAPIClient:
             }
         ]
 
-        # 复用你已有的 _generate 方法
+        # Reuse the existing _generate method
         content = self._generate(messages, max_tokens=128, temperature=0.0)
         
-        # 解析返回的坐标字符串
+        # Parse the returned coordinate string
         import re
         numbers = re.findall(r"\d+", content)
         if len(numbers) >= 4:
-            # 假设输入图像是 Numpy array，我们需要获取它的尺寸来反归一化
-            # 注意：这里我们传入的是 image 对象，需要获取宽高
+            # Assuming the input image is a Numpy array, we need its dimensions to denormalize
+            # Note: We are passing the image object here, so we need to extract width and height
             h, w = 0, 0
             if isinstance(image, np.ndarray):
                 h, w = image.shape[:2]
             elif isinstance(image, Image.Image):
                 w, h = image.size
             else:
-                # 如果是路径，暂时无法获取尺寸，只能返回归一化坐标或失败
-                # 建议调用此方法前先转成 Numpy/PIL
+                # If it's a path, we cannot easily get dimensions here, so return None
+                # It is recommended to convert to Numpy/PIL before calling this method
                 return None
             
             if h > 0 and w > 0:

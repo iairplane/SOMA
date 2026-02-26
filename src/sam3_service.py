@@ -1,7 +1,7 @@
-#!/usr/bin/env python
-"""SAM3 独立服务程序 (SOMA)
+"""SAM3 Remote Service (SOMA)
 
-提供 HTTP API 给主评测进程调用，执行所有依赖 SAM3 的视觉 MCP 工具。
+Provide HTTP API for SOMA agent to call SAM3 functionalities without heavy dependencies. 
+This decouples SAM3 from the main agent code and allows for more flexible deployment.
 
 Endpoints:
 - GET  /health
@@ -10,17 +10,17 @@ Endpoints:
 - POST /replace_texture
 - POST /replace_background
 
-请求统一格式:
+All endpoints expect JSON input with at least "image" (base64 PNG) and "prompt" (text).:
 {
   "image": "data:image/png;base64,..." 或 "base64...",
-  "prompt": "text prompt"  # 根据接口不同也可能是 target_object / region_prompt
+  "prompt": "text prompt"  # maybe target_object / region_prompt for backward compatibility
   ...
 }
 
-返回统一格式:
+With successful processing, the response will be:
 {
   "success": true/false,
-  "image": "base64..."  # 处理后 PNG
+  "image": "base64..."  # Processed PNG
   "message": "..."
 }
 """
@@ -111,7 +111,7 @@ def init_sam3_model(device: str, sam3_weight_path: str) -> bool:
 
 def _get_mask(image: np.ndarray, prompt: str, score_th: float = 0.25) -> Tuple[np.ndarray, float]:
     """
-    结合 VLM (引用自 soma_vlm) 和 SAM3 获取 Mask
+    Get the Mask by combining VLM (referenced from soma_vlm) and SAM3
     """
     global sam3_predictor, vlm_client
     if sam3_predictor is None:
@@ -122,15 +122,15 @@ def _get_mask(image: np.ndarray, prompt: str, score_th: float = 0.25) -> Tuple[n
     pil = Image.fromarray(image.astype(np.uint8)).convert("RGB")
     state = sam3_predictor.set_image(pil)
     
-    # --- 策略 A: 优先使用 VLM 检测 Box ---
+    # --- Strategy A: Prioritize using VLM to detect Box ---
     if vlm_client:
         try:
-            # 直接调用 soma_vlm 中的方法
+            # Call the method in soma_vlm directly
             bbox = vlm_client.detect_object(image, prompt) # [x1, y1, x2, y2]
             print(f"VLM detected bbox: {bbox}")
             if bbox:
                 logger.info(f"VLM detected box: {bbox}")
-                # 使用 VLM 框辅助筛选 SAM3 的结果 (这是最稳健的集成方式，不需要改 SAM3 源码)
+                # Use the VLM box to help filter SAM3 results (This is the most robust integration method, no need to modify SAM3 source code)
                 result = sam3_predictor.set_text_prompt(state=state, prompt=prompt)
                 masks = result.get("masks", torch.tensor([])).detach().cpu().numpy()
                 scores = result.get("scores", torch.tensor([])).detach().cpu().numpy()
@@ -144,27 +144,27 @@ def _get_mask(image: np.ndarray, prompt: str, score_th: float = 0.25) -> Tuple[n
                         m_bool = m.squeeze() > 0
                         if not np.any(m_bool): continue
                         
-                        # 计算 Mask 的包围盒
+                        # Calculate the bounding box of the Mask
                         ys, xs = np.where(m_bool)
                         mx1, mx2, my1, my2 = xs.min(), xs.max(), ys.min(), ys.max()
                         
-                        # 计算交集
+                        # Calculate intersection
                         ix1 = max(bbox[0], mx1); iy1 = max(bbox[1], my1)
                         ix2 = min(bbox[2], mx2); iy2 = min(bbox[3], my2)
                         inter = max(0, ix2-ix1) * max(0, iy2-iy1)
                         
-                        # 简单的匹配度指标
+                        # Simple matching metric
                         metric = inter / (box_area + 1e-6)
                         if metric > best_iou:
                             best_iou = metric
                             best_idx = i
                     
-                    if best_idx != -1 and best_iou > 0.1: # 至少有一定重叠
+                    if best_idx != -1 and best_iou > 0.1: # Require at least some overlap
                         return (masks[best_idx].squeeze() > 0).astype(np.uint8), float(scores[best_idx])
         except Exception as e:
             logger.warning(f"VLM detect failed, falling back to pure SAM3: {e}")
 
-    # --- 策略 B: 纯 SAM3 文本模式 (Fallback) ---
+    # --- Strategy B: Pure SAM3 text mode (Fallback) ---
     logger.info(f"Using SAM3 text prompt: {prompt}")
     result = sam3_predictor.set_text_prompt(state=state, prompt=prompt)
     scores = result.get("scores", np.array([])).detach().cpu().numpy()

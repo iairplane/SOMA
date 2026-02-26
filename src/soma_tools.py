@@ -1,3 +1,23 @@
+"""
+SOMA: Self-Organizing Memory Agent
+==================================
+
+Description:
+------------
+This module implements the Atomic Toolbox (often referred to as 'The Limbs') 
+for the SOMA framework. It provides the programmatic interfaces for executing 
+visual augmentations and counterfactual image editing (e.g., overlaying targets, 
+removing distractors, or altering textures).
+
+
+
+To maintain high-frequency execution in the main robotic control loop, this module 
+is designed using a Client-Server (CS) architecture. Heavy foundational vision 
+models (like Segment Anything 3) are not loaded into the local VRAM of the agent process. 
+Instead, images are base64-encoded and transmitted to an independent HTTP service, 
+ensuring the agent remains lightweight and non-blocking.
+"""
+
 import base64
 import io
 import logging
@@ -98,9 +118,13 @@ class Sam3HttpClient:
 
 
 class MCPTools:
-    """SOMA 原子工具箱 (The Limbs)
+    """
+    SOMA Atomic Toolbox (The Limbs)
 
-    说明：此版本不在本进程加载 SAM3，而是通过 HTTP 调用独立的 SAM3 服务。
+    Description:
+    This version does not load the heavy SAM3 models into the main process. 
+    Instead, it delegates visual operations to an independent SAM3 HTTP service 
+    to ensure the primary control loop remains lightweight and fast.
 
     Tool API:
     - apply_visual_overlay(image, target, color)

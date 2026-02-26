@@ -1,3 +1,22 @@
+"""
+SOMA: Self-Organizing Memory Agent
+==================================
+
+Description:
+------------
+This module implements the core Memory Bank for the SOMA framework. 
+It serves as a lightweight, persistent Vector Database and Asset Manager 
+that stores episodic experiences (both successful and failed executions).
+
+The Memory Bank utilizes NumPy for fast vector operations and JSONL for 
+metadata storage. It is designed with atomic write operations to ensure 
+thread-safety and data integrity during concurrent read/write access in 
+distributed robotic training and evaluation loops. It provides the necessary 
+infrastructure for Retrieval-Augmented Generation (RAG) by allowing the 
+agent to fetch contextually relevant past experiences based on high-dimensional 
+embeddings.
+"""
+
 import json
 import logging
 from datetime import datetime
@@ -14,13 +33,14 @@ def make_info_schema(
     task_plan: Optional[dict] = None,
     mcp_trace: Optional[list] = None,
 ) -> dict:
-    """统一的 SOMA Memory schema
+    """
+    Unified SOMA Memory schema.
 
-    info.task_plan 建议字段：
-    - key_frame_range: {start:int, end:int}
+    Recommended fields for info.task_plan:
+    - key_frame_range: {start: int, end: int}
     - success_max_step: int
     - subtask_success_max_steps: list[int]
-    - rollback: {reverse_steps:int, buffer_steps:int}
+    - rollback: {reverse_steps: int, buffer_steps: int}
     """
 
     return {
@@ -40,7 +60,7 @@ def get_task_plan_defaults() -> dict:
 
 
 class MemoryBank:
-    """SOMA 核心记忆库 (Vector DB + Asset Manager)"""
+    """Core SOMA Memory Bank (Vector DB + Asset Manager)"""
 
     def __init__(self, storage_dir: Union[str, Path], dimension: int = 1168):
         self.storage_dir = Path(storage_dir)
@@ -60,7 +80,7 @@ class MemoryBank:
 
     def _init_storage(self):
         if not self.storage_dir.exists():
-            logging.info(f"[MemoryBank] 创建新记忆库: {self.storage_dir}")
+            logging.info(f"[MemoryBank] Creating new memory bank at: {self.storage_dir}")
             self.storage_dir.mkdir(parents=True)
 
         for key in ["success", "failure"]:
@@ -79,43 +99,43 @@ class MemoryBank:
                         if line.strip():
                             meta_list.append(json.loads(line))
             except Exception as e:
-                logging.error(f"[MemoryBank] 加载 {partition} 元数据失败: {e}")
+                logging.error(f"[MemoryBank] Failed to load {partition} metadata: {e}")
 
         if vec_path.exists():
             try:
                 vecs = np.load(vec_path)
                 if vecs.ndim != 2 or vecs.shape[1] != self.dimension:
                     logging.warning(
-                        f"[MemoryBank] 向量维度不匹配 ({getattr(vecs, 'shape', None)} vs {self.dimension})，将重置向量库！"
+                        f"[MemoryBank] Vector dimension mismatch ({getattr(vecs, 'shape', None)} vs {self.dimension}). Resetting vector database!"
                     )
                     vecs = np.empty((0, self.dimension), dtype=np.float32)
                     meta_list = []
                 else:
                     if len(vecs) != len(meta_list):
                         logging.warning(
-                            f"[MemoryBank] 数据损坏: 向量数({len(vecs)})与元数据数({len(meta_list)})不一致。截断以对齐。"
+                            f"[MemoryBank] Data corruption detected: Mismatch between vector count ({len(vecs)}) and metadata count ({len(meta_list)}). Truncating to align."
                         )
                         min_len = min(len(vecs), len(meta_list))
                         vecs = vecs[:min_len]
                         meta_list = meta_list[:min_len]
             except Exception as e:
-                logging.error(f"[MemoryBank] 加载 {partition} 向量失败: {e}")
+                logging.error(f"[MemoryBank] Failed to load {partition} vectors: {e}")
                 vecs = np.empty((0, self.dimension), dtype=np.float32)
         else:
             vecs = np.empty((0, self.dimension), dtype=np.float32)
 
         self.index[partition]["vecs"] = vecs
         self.index[partition]["meta"] = meta_list
-        logging.info(f"[MemoryBank] 加载 {partition}: {len(meta_list)} 条经验")
+        logging.info(f"[MemoryBank] Loaded {partition}: {len(meta_list)} experiences.")
 
     def _save_vectors(self, partition: str):
         vec_path = self.dirs[partition] / "vectors.npy"
         
-        # [修复] 确保父目录存在
+        # Ensure parent directories exist before writing
         vec_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # [修复] 使用 PID 命名临时文件，防止并发冲突
-        # 使用 tempfile 模块在同一目录下创建临时文件
+        # Use PID to name temporary files to prevent concurrency conflicts during parallel rollouts
+        # Create a temporary file in the target directory using the tempfile module
         fd, temp_name = tempfile.mkstemp(
             dir=str(vec_path.parent), 
             prefix=f"vectors_{os.getpid()}_", 
@@ -123,16 +143,16 @@ class MemoryBank:
         )
         
         try:
-            # 写入数据到临时文件
+            # Write vector data to the temporary file
             with os.fdopen(fd, 'wb') as f:
                 np.save(f, self.index[partition]["vecs"])
             
-            # [修复] 原子性替换：在 Unix 上 replace 是原子的
-            # 这样即使程序在这一秒崩溃，旧的 vectors.npy 依然是完整的
+            # Atomic replacement: os.replace is atomic on POSIX systems, ensuring data integrity 
+            # even if the process crashes during a write operation.
             os.replace(temp_name, str(vec_path))
             
         except Exception as e:
-            logging.error(f"[SOMA] 关键错误：无法保存向量库 {partition} - {e}")
+            logging.error(f"[SOMA] Critical Error: Unable to save vector database {partition} - {e}")
             if os.path.exists(temp_name):
                 os.remove(temp_name)
 
@@ -157,7 +177,7 @@ class MemoryBank:
             embedding = np.array(embedding, dtype=np.float32)
 
         if embedding.shape[0] != self.dimension:
-            logging.error(f"[MemoryBank] 写入失败: 向量维度 {embedding.shape[0]} != {self.dimension}")
+            logging.error(f"[MemoryBank] Write failed: Vector dimension {embedding.shape[0]} != {self.dimension}")
             return
 
         norm = np.linalg.norm(embedding)
@@ -184,12 +204,14 @@ class MemoryBank:
         self._append_metadata(partition, record)
         self._save_vectors(partition)
     
-        logging.info(f"[MemoryBank] 已存入 {partition} 经验: {task_desc[:30]}...")
+        logging.info(f"[MemoryBank] Stored {partition} experience: {task_desc[:30]}...")
 
     def get_best_task_plan(self, *, partition: str = "success") -> dict:
-        """取一个可用的 task_plan（用于控制流默认值/原型验证）。
+        """
+        Retrieves an available task_plan (used for control flow defaults or prototype validation).
 
-        当前策略：从指定 partition 的 meta 中倒序找第一个包含 info.task_plan 的记录。
+        Current strategy: Iterates backward through the metadata of the specified partition 
+        to find the first record containing a valid info.task_plan.
         """
 
         if partition not in self.index:
@@ -201,7 +223,7 @@ class MemoryBank:
             if isinstance(task_plan, dict):
                 merged = get_task_plan_defaults()
                 merged.update(task_plan)
-                # deep merge for nested
+                # deep merge for nested dictionaries
                 if isinstance(task_plan.get("key_frame_range"), dict):
                     merged["key_frame_range"].update(task_plan["key_frame_range"])
                 if isinstance(task_plan.get("rollback"), dict):
