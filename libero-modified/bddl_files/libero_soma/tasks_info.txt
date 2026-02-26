@@ -1,5 +1,8 @@
 libero/bddl_files/libero_soma/soma_distractor_challenge.bddl
+libero/bddl_files/libero_soma/soma_visual_origin.bddl
 libero/bddl_files/libero_soma/soma_visual_challenge.bddl
+libero/bddl_files/libero_soma/soma_visual_smolvla_origin.bddl
+libero/bddl_files/libero_soma/soma_visual_smolvla_challenge.bddl
 libero/bddl_files/libero_soma/soma_noisy_prompt_challenge.bddl
-libero/bddl_files/libero_soma/soma_background_challenge.bddl
+libero/bddl_files/libero_soma/soma_noisy_pi0.bddl
 libero/bddl_files/libero_soma/soma_chain_step_challenge.bddl

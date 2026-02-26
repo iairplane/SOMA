@@ -1,71 +1,99 @@
 (define (problem LIBERO_Tabletop_Manipulation)
   (:domain robosuite)
-  (:language Pick the central akita black bowl and place it on the plate)
+  (:language "Pick the bowl on the center of the cross formation and place it on the plate")
 
   (:regions
-    ;; 1. 目的地：盘子所在的区域
+    ;; --- 1. 十字中心 (Center) ---
+    (cross_center_region
+        (:target main_table)
+        (:ranges (
+            (-0.1 -0.01 -0.05 0.01) ; 中心点不变
+          )
+        )
+    )
+
+    ;; --- 2. 十字上方 (Top/Back) ---
+    ;; 向后推远 (X 变大)
+    (cross_top_region
+        (:target main_table)
+        (:ranges (
+            (0.05 -0.05 0.08 0.05) ; 之前是 0.08，现在拉远到 0.20
+          )
+        )
+    )
+
+    ;; --- 3. 十字下方 (Bottom/Front) ---
+    ;; 向前拉近 (X 变小/负数)
+    (cross_bottom_region
+        (:target main_table)
+        (:ranges (
+            (-0.25 -0.05 -0.2 0.05) ; 之前是 -0.16，现在拉近到 -0.25 (靠近底座)
+          )
+        )
+    )
+
+    ;; --- 4. 十字左侧 (Left) ---
+    ;; 向左拉开 (Y 变大)
+    (cross_left_region
+        (:target main_table)
+        (:ranges (
+            (-0.05 0.12 0.05 0.16) ; 之前是 0.08，现在拉开到 0.25
+          )
+        )
+    )
+
+    ;; --- 5. 十字右侧 (Target) ---
+    ;; 向右拉开 (Y 变小/负数)
+    (cross_right_region
+        (:target main_table)
+        (:ranges (
+            (-0.1 -0.15 -0.05 -0.1) ; 之前是 -0.16，现在拉开到 -0.35 (非常靠右)
+          )
+        )
+    )
+
+    ;; --- 6. 目标存放区 (盘子) ---
+    ;; [重要修改] 移到里底座更近的地方 (X 为负数)
+    ;; 放在左下角，避免和 Bottom 区域的碗冲突
     (plate_region
-        (:target main_table)
-        (:ranges (
-            (0.05 0.19 0.07 0.21)
+          (:target main_table)
+          (:ranges (
+              (0.05 0.19 0.07 0.21)
+            )
           )
-        )
-    )
-
-    ;; 2. 目标碗初始位置 (中心)
-    (target_bowl_region
-        (:target main_table)
-        (:ranges (
-            (-0.02 -0.02 0.02 0.02)
-          )
-        )
-    )
-
-    ;; 3. 干扰项 A 区域 (左侧紧贴)
-    (distractor_left_region
-        (:target main_table)
-        (:ranges (
-            (-0.15 -0.05 -0.10 0.05)
-          )
-        )
-    )
-
-    ;; 4. 干扰项 B 区域 (右前侧紧贴)
-    (distractor_right_region
-        (:target main_table)
-        (:ranges (
-            (0.10 -0.10 0.15 0.00)
-          )
-        )
-    )
+      )
   )
 
   (:fixtures
     main_table - table
-    ;; 如果需要背景装饰，可以取消下面注释，但建议先保持最简以防报错
-    ;; wooden_cabinet_1 - wooden_cabinet
   )
 
   (:objects
-    ;; 核心：必须显式列出所有实例，Libero_Tabletop_Manipulation 才会加载它们
-    akita_black_bowl_1 akita_black_bowl_2 akita_black_bowl_3 - akita_black_bowl
+    akita_black_bowl_target akita_black_bowl_center akita_black_bowl_top akita_black_bowl_bottom akita_black_bowl_left - akita_black_bowl
     plate_1 - plate
   )
 
   (:obj_of_interest
-    akita_black_bowl_1
+    akita_black_bowl_center
     plate_1
   )
 
   (:init
-    (On akita_black_bowl_1 main_table_target_bowl_region)
-    (On akita_black_bowl_2 main_table_distractor_left_region)
-    (On akita_black_bowl_3 main_table_distractor_right_region)
+    ;; 目标碗：最右侧
+    ;;(On akita_black_bowl_target main_table_cross_right_region)
+
+    ;; 干扰碗
+    (On akita_black_bowl_center main_table_cross_center_region)
+    ;;(On akita_black_bowl_top    main_table_cross_top_region)
+    ;;(On akita_black_bowl_bottom main_table_cross_bottom_region)
+    ;;(On akita_black_bowl_left   main_table_cross_left_region)
+
+    ;; 盘子
     (On plate_1 main_table_plate_region)
   )
 
   (:goal
-    ;; 判定成功：只有 1 号碗（中间的）被放到盘子上才算成功
-    (And (On akita_black_bowl_1 plate_1))
+    ;;(And (On akita_black_bowl_target plate_1))
+    (And (On akita_black_bowl_center plate_1))
   )
 )

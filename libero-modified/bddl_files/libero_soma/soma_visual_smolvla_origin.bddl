@@ -1,6 +1,6 @@
 (define (problem LIBERO_Floor_Manipulation)
   (:domain robosuite)
-  (:language Sort the items:milk and cream cheese to the basket, tomato sauce to the plate.)
+  (:language Pick the rightmost cream cheese and place it in the basket)
     (:regions
       (bin_region
           (:target floor)
@@ -61,43 +61,30 @@
   )
 
   (:objects
-    milk_1 - milk
     basket_1 - basket
-    cream_cheese_1 - cream_cheese
     tomato_sauce_1 - tomato_sauce
-    butter_1 - butter
-    ;;ketchup_1 - ketchup
-    ;;orange_juice_1 - orange_juice
-    chocolate_pudding_1 - chocolate_pudding
-    plate_1 - plate
+    cream_cheese_1 cream_cheese_2 cream_cheese_3 - cream_cheese
+    bbq_sauce_1 - bbq_sauce
+    ketchup_1 - ketchup
   )
 
   (:obj_of_interest
-    milk_1
-    cream_cheese_1
-    ;;tomato_sauce_1
+    cream_cheese_3
     basket_1
-    plate_1
-    chocolate_pudding_1
   )
 
   (:init
-    (On milk_1 floor_target_object_region)
-    (On cream_cheese_1 floor_other_object_region_0)
-    (On chocolate_pudding_1 floor_other_object_region_1)
-    (On butter_1 floor_other_object_region_3)
-    ;;(On orange_juice_1 floor_other_object_region_3)
-    (On tomato_sauce_1 floor_other_object_region_4)
+    (On cream_cheese_3 floor_target_object_region)
+    (On tomato_sauce_1 floor_other_object_region_0)
+    (On cream_cheese_1 floor_other_object_region_1)
+    (On cream_cheese_2 floor_other_object_region_2)
+    (On bbq_sauce_1 floor_other_object_region_3)
+    (On ketchup_1 floor_other_object_region_4)
     (On basket_1 floor_bin_region)
-    (On plate_1 floor_other_object_region_2)
   )
 
   (:goal
-    (And 
-      (In milk_1 basket_1_contain_region)
-      ;;(On chocolate_pudding_1 plate_1)
-      (In cream_cheese_1 basket_1_contain_region)
-    )
+    (And (In cream_cheese_3 basket_1_contain_region))
   )
 
 )

@@ -1,10 +1,6 @@
 (define (problem LIBERO_Floor_Manipulation)
   (:domain robosuite)
-  ;; 模糊指令：
-  ;; 1. "red stuff" -> 可能是 Ketchup 或 Tomato Sauce
-  ;; 2. "Not the pasta one" -> 排除 Tomato Sauce
-  ;; 3. "for fries" -> 暗指 Ketchup
-  (:language "Hey, umm... look down there. Can you grab that red sauce bottle? You know, the one for fries? Not the pasta sauce, the other red one. Yeah, put it in the basket.")
+  (:language "Hey, umm... look down there. Can you grab that bottle? You know, the one for fries? Yeah, put it in the basket.")
   
   (:regions
     (bin_region
@@ -21,7 +17,6 @@
           )
         )
     )
-    ;; 干扰区域 0: 放置最强干扰项 (Tomato Sauce)
     (other_object_region_0
         (:target floor)
         (:ranges (
@@ -29,7 +24,6 @@
           )
         )
     )
-    ;; 干扰区域 1: 放置形状干扰项 (BBQ Sauce)
     (other_object_region_1
         (:target floor)
         (:ranges (
@@ -37,7 +31,6 @@
           )
         )
     )
-    ;; 其他杂物区域
     (other_object_region_2
         (:target floor)
         (:ranges (
@@ -69,22 +62,13 @@
   )
 
   (:objects
-    ;; === 目标物体 (Target) ===
-    ;; Ketchup: 截图里有的合法物体
+    ;;(Target)
     ketchup_target - ketchup
     
-    ;; 容器
     basket_1 - basket
     
-    ;; === 关键干扰项 (Hard Negatives) ===
-    ;; 1. Tomato Sauce: 也是红色的，用来测试 "Not the pasta sauce" 的负面约束理解
+    ;;(Hard Negatives)
     tomato_sauce_dist - tomato_sauce
-    
-    ;; 2. BBQ Sauce: 形状相似的瓶子，颜色较深，用来测试视觉形状识别
-    bbq_sauce_dist - bbq_sauce
-    
-    ;; === 普通干扰项 (Random Clutter) ===
-    ;; 均选自截图中的合法列表
     milk_dist - milk
     popcorn_dist - popcorn
     butter_dist - butter
@@ -96,12 +80,10 @@
   )
 
   (:init
-    ;; 目标放在 Target Region
+    ;;Target Region
     (On ketchup_target floor_target_object_region)
     
-    ;; 干扰项放置
     (On tomato_sauce_dist floor_other_object_region_0)
-    (On bbq_sauce_dist floor_other_object_region_1)
     (On milk_dist floor_other_object_region_2)
     (On popcorn_dist floor_other_object_region_3)
     (On butter_dist floor_other_object_region_4)
@@ -110,7 +92,6 @@
   )
 
   (:goal
-    ;; 任务成功判定：只有 Ketchup 在篮子里才算成功
     (And (In ketchup_target basket_1_contain_region))
   )
 )

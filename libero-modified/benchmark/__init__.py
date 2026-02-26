@@ -65,7 +65,17 @@ task_maps = {}
 max_len = 0
 for libero_suite in libero_suites:
     task_maps[libero_suite] = {}
-
+    if libero_suite == "libero_soma":
+        for task in libero_task_map[libero_suite]:
+            language = grab_language_from_filename(task + ".bddl")
+            task_maps[libero_suite][task] = Task(
+                name=task,
+                language=language,
+                problem="Libero",
+                problem_folder=libero_suite,
+                bddl_file=f"{task}.bddl",
+                init_states_file=f"{task}.init",
+            )
     for task in libero_task_map[libero_suite]:
         language = grab_language_from_filename(task + ".bddl")
         task_maps[libero_suite][task] = Task(
@@ -224,48 +234,107 @@ class LIBERO_SOMA(Benchmark):
     def __init__(self, task_order_index=0):
         super().__init__(task_order_index=task_order_index)
         self.name = "libero_soma"
-        self.tasks = [
-            Task(
-                name="SOMA_Distractor_Challenge",
-                language="pick up the central black bowl and place it on the plate",
-                problem="Libero_Tabletop_Manipulation",  # 必须与 Python 类名一致
-                problem_folder="libero_soma",         # 必须与文件夹名一致
-                bddl_file="soma_distractor_challenge.bddl",           # 必须与文件名一致
-                init_states_file="soma_distractor_challenge.init"
-            ),
-            Task(
-                name="SOMA_Visual_Challenge",
-                language="Pick up the black bowl that is furthest from the robot base and place it on the plate",
-                problem="Libero_Tabletop_Manipulation",  # 必须与 Python 类名一致
-                problem_folder="libero_soma",         # 必须与文件夹名一致
-                bddl_file="soma_visual_challenge.bddl",           # 必须与文件名一致
-                init_states_file="soma_visual_challenge.init"
-            ),
-            Task(
-                name="SOMA_Noisy_Prompt_Challenge",
-                language="Hey, umm... look down there. Can you grab that red sauce bottle? You know, the one for fries? Not the pasta sauce, the other red one. Yeah, put it in the basket.",
-                problem="Libero_Floor_Manipulation",  # 必须与 Python 类名一致
-                problem_folder="libero_soma",         # 必须与文件夹名一致
-                bddl_file="soma_noisy_prompt_challenge.bddl",           # 必须与文件名一致
-                init_states_file="soma_noisy_prompt_challenge.init"
-            ),
-            Task(
-                name="SOMA_Background_Challenge",
-                language="This table pattern is giving me a headache! It's too noisy to see anything. Could you just grab the ketchup bottle and put it in the basket? Replace the ugly background.",
-                problem="Libero_Tabletop_Manipulation",  # 必须与 Python 类名一致
-                problem_folder="libero_soma",         # 必须与文件夹名一致
-                bddl_file="soma_background_challenge.bddl",           # 必须与文件名一致
-                init_states_file="soma_background_challenge.init"
-            ),
-            Task(
-                name="SOMA_Chain_Step_Challenge",
-                language="Sort the items: tomato sauce to the left, popcorn to the basket, milk to the right.",
-                problem="Libero_Floor_Manipulation",  # 必须与 Python 类名一致
-                problem_folder="libero_soma",         # 必须与文件夹名一致
-                bddl_file="soma_chain_step_challenge.bddl",           # 必须与文件名一致
-                init_states_file="soma_chain_step_challenge.init"
-            )
-        ]
+        # self.tasks = [
+        #     Task(
+        #         name="SOMA_Distractor_Challenge",
+        #         # language="Pick the black bowl on the center of the cross formation and place it on the plate",
+        #         language="Pick the black bowl from table center and place it on the plate",
+        #         problem="LIBERO_Tabletop_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_distractor_challenge.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_distractor_challenge.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Distractor_PI0",
+        #         language="Pick the akita black bowl from table center and place it on the plate",
+        #         problem="LIBERO_Tabletop_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_distractor_pi0.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_distractor_pi0.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Distractor_PI05_NO",
+        #         language="Pick up the red highlighted bowl on the left of the cross formation and place it on the plate",
+        #         problem="LIBERO_Tabletop_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_distractor_pi05_no.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_distractor_pi05_no.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Distractor_PI05_LIMIT",
+        #         language="Pick up the red highlighted bowl on the left of the cross formation and place it on the plate",
+        #         problem="LIBERO_Tabletop_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_distractor_pi05_limit.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_distractor_pi05_limit.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Distractor_PI05_RICH",
+        #         language="Pick up the white bowl on the left and place it on the plate",
+        #         problem="LIBERO_Tabletop_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_distractor_pi05_rich.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_distractor_pi05_rich.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Visual_Origin",
+        #         language="Pick up the red bowl bowl on the center of the cross formation and place it on the plate",
+        #         problem="Libero_Tabletop_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_visual_origin.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_visual_origin.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Visual_Challenge",
+        #         language="Pick up the center white bowl and place it on the plate",
+        #         problem="LIBERO_Tabletop_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_visual_challenge.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_visual_challenge.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Visual_Smolvla_Origin", # PI0/Smolvla Visual Challenge
+        #         language="Pick the rightmost cream cheese and place it in the basket",
+        #         problem="LIBERO_Floor_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_visual_smolvla_origin.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_visual_smolvla_origin.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Visual_Smolvla_Challenge",
+        #         language="Pick the red butter and place it in the basket",
+        #         problem="LIBERO_Floor_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_visual_smolvla_challenge.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_visual_smolvla_challenge.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Noisy_Prompt_Challenge",
+        #         # language="Hey, umm... look down there. Can you grab that bottle? You know, the one for fries? Yeah, put it in the basket.",
+        #         language="Pick the ketchup and place it in the basket",
+        #         problem="LIBERO_Floor_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_noisy_prompt_challenge.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_noisy_prompt_challenge.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Noisy_PI0_Challenge",
+        #         # language="Hey, umm... look down there. Can you grab that bottle? You know, the one for fries? Yeah, put it in the basket.",
+        #         language="Pick the ketchup and place it in the basket",
+        #         problem="LIBERO_Floor_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_noisy_pi0.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_noisy_pi0.init"
+        #     ),
+        #     Task(
+        #         name="SOMA_Chain_Step_Challenge",
+        #         language="Sort the items:pick up milk, tomato sauce and cream cheese to the basket.",
+        #         problem="LIBERO_Floor_Manipulation",  # 必须与 Python 类名一致
+        #         problem_folder="libero_soma",         # 必须与文件夹名一致
+        #         bddl_file="soma_chain_step_challenge.bddl",           # 必须与文件名一致
+        #         init_states_file="soma_chain_step_challenge.init"
+        #     )
+        # ]
         
-        self.n_tasks = len(self.tasks)
-        # self._make_benchmark()
+        # self.n_tasks = len(self.tasks)
+        self._make_benchmark()

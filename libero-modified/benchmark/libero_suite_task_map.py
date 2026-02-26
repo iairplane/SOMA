@@ -140,6 +140,13 @@ libero_task_map = {
         "STUDY_SCENE4_pick_up_the_book_on_the_right_and_place_it_under_the_cabinet_shelf",
     ],
     "libero_soma": [
-        "soma_distractor_challenge"
+        "soma_visual_origin", # Pi05 Visual Challenge
+        "soma_visual_challenge",
+        # "soma_visual_smolvla_origin", # Smolvla/Pi0 Visual Challenge
+        # "soma_visual_smolvla_challenge",
+        "soma_distractor_challenge", # Pi05/Smolvla/Pi0 Distractor Challenge
+        "soma_noisy_prompt_challenge", # PI05 Noisy Prompt Challenge
+        # "soma_noisy_pi0", # Smolvla/Pi0 Noisy Prompt Challenge
+        "soma_chain_step_challenge",
     ],
 }

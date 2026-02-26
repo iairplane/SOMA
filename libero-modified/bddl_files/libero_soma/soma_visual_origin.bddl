@@ -1,6 +1,6 @@
 (define (problem LIBERO_Tabletop_Manipulation)
   (:domain robosuite)
-  (:language "Pick up the white bowl bowl on the Center of the cross formation and place it on the plate")
+  (:language "Pick up the red bowl bowl on the Center of the cross formation and place it on the plate")
 
   (:regions
     ;; --- 1. 十字中心 (Center) ---
@@ -69,24 +69,25 @@
   )
 
   (:objects
-    red_bowl_1 red_bowl_2 red_bowl_3 red_bowl_4 - red_bowl
+    red_bowl_1 red_bowl_2 red_bowl_3 red_bowl_4 red_bowl_5 - red_bowl
     white_bowl_1 white_bowl_2 - white_bowl
     plate_1 - plate
   )
 
   (:obj_of_interest
-    ;;red_bowl_1
-    white_bowl_1
+    ;;akita_black_bowl_target
+    red_bowl_1
+    ;;white_bowl_1
     plate_1
   )
 
   (:init
     ;; 目标碗：最左侧
-    (On red_bowl_1   main_table_cross_left_region)
+    (On red_bowl_5   main_table_cross_left_region)
 
     ;; 干扰碗
     (On red_bowl_2 main_table_cross_right_region)
-    (On white_bowl_1 main_table_cross_center_region)
+    (On red_bowl_1 main_table_cross_center_region)
     (On red_bowl_3 main_table_cross_top_region)
     (On red_bowl_4 main_table_cross_bottom_region)
 
@@ -96,6 +97,6 @@
 
   (:goal
     ;;(And (On akita_black_bowl_target plate_1))
-    (And (On white_bowl_1 plate_1))
+    (And (On red_bowl_1 plate_1))
   )
 )
