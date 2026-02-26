@@ -1,208 +1,184 @@
-# SOMA 推理 Pipeline 使用说明（`SOMA/src`）
+# SOMA: Self-Organizing Memory Agent - Evaluation Guide
 
-## 0. 怎么跑起来
-### 0.1 启动 SAM3 服务（另一个终端）
+**SOMA** is a framework that decouples high-level Vision-Language Models (VLMs) from low-level continuous control policies. By utilizing a Client-Server (CS) architecture for heavy visual foundations (like SAM3), SOMA provides robotic agents with dynamic perceptual interventions, automatic rollback (Encore) mechanisms, and multi-stage task chaining capabilities—all while maintaining high-frequency execution in the primary control loop.
+
+This guide details how to run policy evaluations using the SOMA framework within the LeRobot environment.
+
+## 0. Quick Start
+
+### 0.1 Start SAM3 Service (In a separate terminal)
+To ensure high-frequency control, the heavy vision model runs as an independent HTTP service.
 ```bash
-python /home/lizhuoran/SOMA/src/sam3_service.py \
+python /path/to/sam3_service.py \
   --host 0.0.0.0 \
   --port 5001 \
   --device cuda \
-  --sam3_weight_path /mnt/disk1/shared_data/lzy/models/sam/sam3.pt
+  --sam3_weight_path /path/to/sam/sam3.pt
 ```
 
-健康检查：
+**Health Check:**
 ```bash
-curl http://127.0.0.1:5001/health | cat
-```
-### 0.2 注册libero任务(`SOMA/libero-modified`)
-将对应 bddl_files 和 init_files 内的 libero_soma 任务添加到 libero 仓库中
-之后替换 benchmark 文件夹内容来注册 libero_soma 任务
-若需要新的 bddl 任务文件注册任务：
-```bash
-python sample_init_states.py 
-  --bddl_file path/to/bddl_files/libero_soma/soma_xxx_challenge.bddl 
-  --save_path path/to/init_files/libero_soma/soma_xxx_challenge.init
+curl [http://127.0.0.1:5001/health](http://127.0.0.1:5001/health) | cat
 ```
 
+### 0.2 Register LIBERO Tasks (`SOMA/libero-modified`)
+Copy the `libero_soma` tasks located in `bddl_files` and `init_files` into your local LIBERO repository. Afterward, replace the contents of the `benchmark` folder to register the `libero_soma` tasks.
 
-### 0.3 运行推理/评测入口 `soma_eval.py`
+If you need to generate init states for new BDDL task files:
 ```bash
-export SOMA_SAM3_URL=http://127.0.0.1:5001
-# 可选：启用 memory（如果你已有 memory 数据）
+python sample_init_states.py \
+  --bddl_file path/to/bddl_files/libero_soma/soma_xxx_challenge.bddl \
+  --save_path /path/to/init_files/libero_soma/soma_xxx_challenge.init
+```
+
+### 0.3 Run Inference / Evaluation Entry Point (`soma_eval.py`)
+```bash
+export SOMA_SAM3_URL=[http://127.0.0.1:5001](http://127.0.0.1:5001)
+# Optional: Enable memory if you already have a populated memory database
 export SOMA_ENABLE_MEMORY=0
 
-python soma_eval.py   
-  --policy.path=path/to/pretrained_model   
-  --env.type=libero   
-  --env.task=libero_soma   
-  --eval.batch_size=1   
-  --eval.n_episodes=1 
-  --rename_map="{'agentview_image':'observation.images.empty_camera_0'}"
+python soma_eval.py \
+  --policy.path=/path/to/pretrained_model \
+  --env.type=libero \
+  --env.task=libero_soma \
+  --eval.batch_size=1 \
+  --eval.n_episodes=10 \
+  --rename_map="{'agentview_image':'observation.images.empty_camera_0'}" # pi05/smolvla/pi0 need to rename
 ```
 
 ---
 
-## 1. 目录结构与每个文件的作用
+## 1. Directory Structure & File Descriptions
 
-### 1.1 推理入口与核心胶水
+### 1.1 Inference Entry & Core Glue
 - **`soma_eval.py`**
-  - **入口脚本**：创建 env + policy + pre/post processor + SOMA perception
-  - 在 rollout 循环中：
-    - 定期调用 `PerceptionModule.process_frame()` 得到 `processed_img/refined_task/control_flags`
-    - 将 `processed_img` 写回 `observation[visual_key]`（policy 视觉输入）
-    - 将 `refined_task` 写入 `add_envs_task(..., task_desc=...)`（policy 文本输入）
-    - 消费控制流 `control_flags`，实现：
-      - `encore`：回退/复位
-      - `key_step_retry`：关键步骤重做（按历史成功步数阈值触发）
-      - `task_decompose`：子任务拆分（成功后复位再推进）
+  - **Entry Script**: Initializes the environment, policy, pre/post-processors, and SOMA perception.
+  - Inside the rollout loop:
+    - Periodically calls `PerceptionModule.process_frame()` to obtain `processed_img`, `refined_task`, and `control_flags`.
+    - Writes `processed_img` back into `observation[visual_key]` (Visual input for the policy).
+    - Injects `refined_task` via `add_envs_task(..., task_desc=...)` (Text input for the policy).
+    - Consumes `control_flags` to execute control flow maneuvers:
+      - `encore`: Rollback / Kinematic reset.
+      - `key_step_retry`: Redo key steps (triggered by historical success step thresholds).
+      - `task_decompose`: Subtask decomposition (Reset before advancing to the next task).
 
 - **`soma_control_flow.py`**
-  - 控制流状态机实现：
-    - `RollbackState`：reverse + buffer 的动作执行器
-    - `TaskDecomposeState`：子任务列表/索引管理
-    - `KeyStepRetryState`：保留控制流参数（当前 `soma_eval.py` 主要用 memory 的 `success_max_step/key_frame_start` 触发）
+  - Control flow state machine implementations:
+    - `RollbackState`: Action executor for reverse and buffer phases.
+    - `TaskDecomposeState`: Subtask list and index management.
+    - `KeyStepRetryState`: Retains control flow parameters (Currently triggered in `soma_eval.py` using `success_max_step/key_frame_start` from memory).
 
-### 1.2 在线“编排器”
+### 1.2 Online Orchestrator
 - **`soma_perception.py`**
-  - `PerceptionModule`：在线编排器
-  - 输入：`image(HWC uint8) + current_task + step + rag_context(可选)`
-  - 输出：`processed_image + refined_task + control_flags`
-  - 内部做：
-    1. 调 `soma_vlm.py` 的 `orchestrate_perception()` 得到 plan JSON（tool_chain/params/refined_task/task_plan）
-    2. 对视觉类 tool 调 `soma_tools.py`（HTTP→SAM3 服务）
-    3. 对控制流类 tool 产出 `control_flags`（给 `soma_eval.py` 做状态机）
+  - `PerceptionModule`: The online cognitive orchestrator.
+  - **Input**: `image(HWC uint8) + current_task + step + rag_context(optional)`
+  - **Output**: `processed_image + refined_task + control_flags`
+  - **Internal Workflow**:
+    1. Calls `orchestrate_perception()` in `soma_vlm.py` to receive a JSON plan (`tool_chain`, `params`, `refined_task`, `task_plan`).
+    2. Routes visual tools to `soma_tools.py` (HTTP requests to the SAM3 service).
+    3. Outputs `control_flags` for control flow tools (handled by the state machine in `soma_eval.py`).
 
-### 1.3 MCP Tools（视觉类，走 SAM3 服务）
+### 1.3 MCP Tools (Visual Tools via SAM3 Service)
 - **`soma_tools.py`**
-  - `MCPTools`：视觉 MCP 工具客户端（**不加载 SAM3**）
-  - 通过 `Sam3HttpClient` 调用 `sam3_service.py`：
-    - `visual_overlay`：高亮目标物体
-    - `remove_distractor`：擦除干扰物（inpaint）
-    - `replace_texture`：相似物体替代（贴图替换）
-    - `replace_background`：背景替换（地面/桌面纹理）
+  - `MCPTools`: The visual MCP client (**Does NOT load SAM3 locally**).
+  - Invokes `sam3_service.py` via `Sam3HttpClient`:
+    - `visual_overlay`: Highlights target objects.
+    - `remove_distractor`: Erases distracting elements (inpainting).
+    - `replace_texture`: Replaces object textures (for similar-object substitution).
+    - `replace_background`: Replaces background environments (floor/table textures).
 
 - **`sam3_service.py`**
-  - Flask 服务端，加载 SAM3 模型
-  - 对外提供 HTTP API，输入 base64 PNG，输出处理后 base64 PNG
-  - 端点：
-    - `GET /health`
-    - `POST /visual_overlay`
-    - `POST /remove_distractor`
-    - `POST /replace_texture`
-    - `POST /replace_background`
+  - A Flask backend hosting the heavy SAM3 model.
+  - Exposes an HTTP API: accepts base64 PNGs and returns processed base64 PNGs.
+  - Endpoints: `GET /health`, `POST /visual_overlay`, `POST /remove_distractor`, `POST /replace_texture`, `POST /replace_background`.
 
-### 1.4 VLM（策略编排决策）
+### 1.4 VLM (Strategic Planning)
 - **`soma_vlm.py`**
   - `Qwen3VLAPIClient`
-  - 核心：
-    - `orchestrate_perception(image, task_desc, rag_context, rag_hints)`：输出严格 JSON plan
-    - `generate_failure_report(...)`：日志/复盘时的失败归因（给 logger 用）
-    - `generate_success_description(...)`：成功总结
+  - Core functions:
+    - `orchestrate_perception(...)`: Outputs strict JSON tool-chain plans.
+    - `generate_failure_report(...)`: Generates failure attribution reports during post-episode reviews (used by the logger).
+    - `generate_success_description(...)`: Generates execution summaries for successful episodes.
 
-依赖环境变量：
+Required Environment Variables:
 ```bash
-export SOMA_VLM_API_KEY=...
-export SOMA_VLM_BASE_URL=...
-export SOMA_VLM_MODEL=qwen3vl
+export SOMA_VLM_API_KEY="sk-xxx"
+export SOMA_VLM_BASE_URL="https://xxx.com/api/v1"
+export SOMA_VLM_MODEL="..."
 ```
 
-### 1.5 Memory / Encoder / Logger（可选）
-- **`soma_encoder.py`**
-  - `AdvancedEmbeddingEncoder`：CLIP 图像向量 + 文本向量 + hash 拼接
-  - 用于 RAG 检索 / 经验入库向量化
+### 1.5 Memory / Encoder / Logger
+- **`soma_encoder.py`**: `AdvancedEmbeddingEncoder` (CLIP vision vector + Text vector + Hash concatenation) for RAG retrieval and experience vectorization.
+- **`soma_memory.py`**: `MemoryBank` (Local vector database partitioned by success/failure). Stores `metadata.jsonl` and `vectors.npy`. Retrieves control flow statistics (e.g., rollback steps, success max steps) via `info.task_plan`.
+- **`soma_logger.py`**: `ExperienceLogger` samples video keyframes, calls VLM for attribution, generates embeddings, and saves to memory.
+- **`soma_agent.py`**: A Facade class that encapsulates VLM, Encoder, Memory, Perception, and Logger into a unified object.
 
-- **`soma_memory.py`**
-  - `MemoryBank`：本地向量库（success/failure 分区）
-  - 保存 `metadata.jsonl` + `vectors.npy`
-  - `info.task_plan` 里存控制流统计（供 `soma_eval.py` 读取）：
-    - `key_frame_range.start`
-    - `success_max_step`
-    - `rollback.reverse_steps/buffer_steps`
-    -（可扩展）`subtask_success_max_steps`
-
-- **`soma_logger.py`**
-  - `ExperienceLogger`：采样视频关键帧、调用 VLM 归因、生成 embedding、写入 memory
-
-- **`soma_agent.py`**
-  - Facade：把 VLM/Encoder/Memory/Perception/Logger 封装成一个对象
-  - 目前 `soma_eval.py` 没走这个 facade（直接手动拼 pipeline），但未来可以用它简化接入。
-
-### 1.6 测试脚本
-- **`test_sam3_mcp_tools.py`**
-  - 最小可行测试：验证 sam3_service + MCPTools 的 4 个视觉工具端到端能跑，并生成输出图片。
+### 1.6 Testing Scripts
+- **`test_sam3_mcp_tools.py`**: Minimum Viable Test (MVT) script. Verifies end-to-end execution of the 4 visual tools between `sam3_service` and `MCPTools`, outputting debug images.
 
 ---
 
-## 2. 完整 pipeline 如何协作（数据流）
-每个 step 的关键链路：
+## 2. Pipeline Data Flow
 
-1. `env.step()` → 得到 `observation`
-2. `preprocess_observation(observation)` → torch 化/规范化
-3. 每 N 步调用 perception（默认每 10 步）：
-   - 取出视觉 key（包含 `image` 或 `rgb`）
-   - tensor → uint8 HWC → `PerceptionModule.process_frame(...)`
-   - 得到 `processed_img/refined_task/control_flags`
-   - `processed_img` 写回 `observation[visual_key]`
-4. `add_envs_task(..., task_desc=refined_task)` → 注入任务文本
-5. `preprocessor(observation)` → 对齐 device/rename 等
-6. `policy.select_action(observation)` → 输出 action
-7. `postprocessor(action)` → 后处理
-8. `env.step(action_numpy)` → 推进环境
-9. `soma_eval.py` 消费 `control_flags` 做控制流（rollback / 子任务切换 / 关键步骤重做）
+Critical execution path for a single step:
+
+1. `env.step()` → Returns `observation`.
+2. `preprocess_observation(observation)` → Normalizes to PyTorch tensors.
+3. Every $N$ steps (default 10), trigger perception:
+   - Extract visual key (contains `image` or `rgb`).
+   - Tensor → uint8 HWC → `PerceptionModule.process_frame(...)`.
+   - Returns `processed_img`, `refined_task`, and `control_flags`.
+   - Overwrite `observation[visual_key]` with `processed_img`.
+4. `add_envs_task(..., task_desc=refined_task)` → Injects refined text prompt.
+5. `preprocessor(observation)` → Aligns device tensors and handles renaming.
+6. `policy.select_action(observation)` → Outputs action predictions.
+7. `postprocessor(action)` → Post-processes the action.
+8. `env.step(action_numpy)` → Steps the physical/simulated environment.
+9. `soma_eval.py` consumes `control_flags` to execute control flows (rollback, task switch, or key step retries).
 
 ---
 
-## 3. 控制流 MCP tool（不走 SAM3）当前实现
+## 3. Control Flow MCP Tools (Non-SAM3) Current Implementation
+
 ### 3.1 `encore`
-- 语义：立即请求回退/复位
-- 执行：`soma_eval.py` 对当前累计动作求和并 reverse（reverse_steps + buffer_steps）
+- **Semantics**: Immediate request for a kinematic rollback/reset.
+- **Execution**: `soma_eval.py` sums the current accumulated actions and reverses the trajectory (`reverse_steps` + `buffer_steps`).
 
 ### 3.2 `key_step_retry`
-- 语义：超过历史成功最大步数仍未成功，则回退到关键帧起点
-- 当前触发阈值来源：
-  - memory 的 `info.task_plan.success_max_step`
-- 当前回退窗口：
-  - `sum(action_hist[key_frame_start : now])`
-- 执行：
-  - `reverse_action = -window_sum / reverse_steps` 执行 reverse_steps，再 buffer
+- **Semantics**: If the current step exceeds the historical `success_max_step` without succeeding, rollback to the keyframe starting point.
+- **Trigger Source**: Extracted from memory via `info.task_plan.success_max_step`.
+- **Rollback Window**: `sum(action_hist[key_frame_start : now])`.
+- **Execution**: Calculates `reverse_action = -window_sum / reverse_steps`, executes for `reverse_steps`, and follows up with stabilization buffer steps.
 
 ### 3.3 `task_decompose`
-- 语义：将长程任务拆成子任务列表 `subtasks`
-- 推进规则：仍按 `success_any=True` 推进，但**推进前先复位**
-- 复位窗口：
-  - `sum(action_hist[subtask_start_step : now])`
-- 执行顺序：
-  1. reverse + buffer
-  2. `subtask_idx += 1`
-  3. 更新 `subtask_start_step`
+- **Semantics**: Decomposes long-horizon tasks into a sequential list of `subtasks`.
+- **Progression Logic**: Advances on `success_any=True`, but **forces a kinematic reset** before moving to the next subtask.
+- **Rollback Window**: `sum(action_hist[subtask_start_step : now])`.
+- **Execution Sequence**:
+  1. Execute reverse + buffer.
+  2. Increment `subtask_idx += 1`.
+  3. Update `subtask_start_step`.
 
 ---
 
-## 4. 依赖与安装建议
-最小依赖（推理侧）：
-- `numpy`
-- `torch`
-- `Pillow`
-- `requests`
-- `gymnasium`
-- `einops`
-- `tqdm`
+## 4. Dependencies & Installation
 
-SAM3 服务端额外依赖：
-- `flask`
-- `flask_cors`
-- `sam3`（你的 SAM3 repo/安装方式）
+**Minimal Dependencies (Inference Side):**
+- `numpy`, `torch`, `Pillow`, `requests`, `gymnasium`, `einops`, `tqdm`
 
-VLM 额外依赖：
-- `openai`（兼容 OpenAI API 格式服务）
-- 网络可达的 VLM endpoint
+**SAM3 Server Additional Dependencies:**
+- `flask`, `flask_cors`, `sam3` (via your specific SAM3 installation method)
+
+**VLM Additional Dependencies:**
+- `openai` (Compatible with OpenAI API format services)
+- Network-accessible VLM endpoint
 
 ---
 
-## 5. 视觉 MCP tools 快速验证
+## 5. Visual MCP Tools Quick Validation
 ```bash
 python test_sam3_mcp_tools.py \
-  --sam3_url http://127.0.0.1:5001 \
+  --sam3_url [http://127.0.0.1:5001](http://127.0.0.1:5001) \
   --image path/to/xxx.png \
   --target "ketchup" \
   --distractor "tomato sauce" \
@@ -211,7 +187,7 @@ python test_sam3_mcp_tools.py \
   --out_dir path/to/output_dir
 ```
 
-输出目录包含：
+The output directory will contain:
 - `0_input.png`
 - `1_overlay.png`
 - `2_remove_distractor.png`
@@ -220,34 +196,116 @@ python test_sam3_mcp_tools.py \
 
 ---
 
-## 6. 视觉 MCP tools 的 Attention-Score Heatmap 对比
+## 6. Visual MCP Tools Attention-Score Heatmap Evaluation
 ```bash
-python tool_attn_score_eval.py \  
+python image_attn_map.py \
+  --attn_raw_img "/path/to/original.jpg" \
+  --attn_soma_img "/path/to/modified.jpg" \
+  --attn_raw_task "Pick up the bowl on the far right of the cross formation and place it on the plate." \
+  --attn_soma_task "Pick up the green bowl and place it on the plate." \
   --policy.path=path/to/pretrained_model \  
-  --env.type=libero   
-  --env.task=libero_soma  \ 
+  --env.type=libero \   
+  --env.task=libero_soma \  
   --eval.batch_size=1 \ 
+  --eval.n_episodes=10 \
+  --rename_map="{'agentview_image':'observation.images.empty_camera_0'}" 
+```
+
+The output directory (`output_dir/soma_debug_dir`) will contain A/B testing visual comparisons:
+- `attn_step_000_compare.jpg`
+- `attn_step_010_compare.jpg`
+- `attn_step_020_compare.jpg`
+- `attn_step_030_compare.jpg`
+...
+
+---
+
+## 7. Multi-Stage Task Chain Evaluation
+
+This pipeline evaluates a policy's performance on **long-horizon tasks** by decomposing them into a sequential chain of subtasks. The agent automatically transitions to the next subtask upon reaching the step limit, utilizing the **Task-Switch Encore** mechanism to reset the kinematic pose and clear accumulated errors between stages.
+
+### Task Configuration
+You can define the sequence of subtasks by editing the `TASK_CHAIN` list in `eval_chain_step.py` (around line 715):
+
+```python
+# Example Task Chain Configuration
+TASK_CHAIN = [
+    {"desc": "Pick up the cream cheese and place it in the basket.", "max_steps": 280},
+    {"desc": "Pick up the milk and place it in the basket.", "max_steps": 280},
+    {"desc": "Pick up the chocolate pudding and place it on the plate.", "max_steps": 300},
+]
+```
+### Evaluation
+Run the evaluation with the following command. You can optionally enable the SOMA agent to provide perceptual interventions for each subtask:
+```bash
+python eval_chain_step.py \
+  --policy.path=path/to/pretrained_model \
+  --env.type=libero \
+  --env.task=libero_soma \
+  --eval.batch_size=1 \
   --eval.n_episodes=1 \
   --rename_map="{'agentview_image':'observation.images.empty_camera_0'}"
 ```
-
-输出目录包含：output_dir/soma_debug
-- `attn_step_000_compare`
-- `attn_step_010_compare`
-- `attn_step_020_compare`
-- `attn_step_030_compare`
-...
 ---
 
-## 7. 常见问题
-- **看不到输出图片**
-  - 确认 `--out_dir` 指向的目录是否正确
-  - `ls -lah <out_dir>`
-- **视觉工具没效果但 HTTP 200**
-  - 多数是 prompt 不匹配（mask 为空）
-  - prompt 建议 `.strip()`；尝试更泛化 prompt：`bottle/floor/table`
-- **VLM 不可用**
-  - 临时让 `tool_chain=[]` 也能跑 eval（只是不做编排与工具）
-- **控制流触发看不出来**
-  - 看日志里的 `[CTRL] Rollback start reason=...`，以及 tqdm postfix 的 `rollback=True/False`
+## 7. FAQ & Troubleshooting
 
+- **I don't see any output images**
+  - Verify that the `--out_dir` path is correct and accessible.
+  - Run `ls -lah <out_dir>` to check directory permissions.
+- **Visual tools have no effect, but HTTP returns 200 OK**
+  - This usually indicates a prompt mismatch (the segmentation mask is empty).
+  - Try calling `.strip()` on your prompts, or use more generalized nouns like `bottle`, `floor`, or `table`.
+- **VLM API is unavailable/failing**
+  - You can temporarily hardcode `tool_chain=[]` in the perception module to bypass the VLM and run standard evaluations without orchestration.
+- **I can't tell if the Control Flow is triggering**
+  - Check your terminal logs for `[CTRL] Rollback start reason=...` and watch the `tqdm` progress bar postfix for `rollback=True/False`.
+
+
+## 8.Core CLI Arguments Reference (SOMA Extensions)
+All SOMA-enhanced evaluation scripts support the following dynamic command-line arguments. These parameters are injected into environment variables to ensure compatibility with LeRobot's core configuration system.
+| Argument | Type | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `--enable_soma` | Flag | Enables the SOMA Agent for dynamic perception and control. | Disabled |
+| `--vlm_api_key` | str | API key for the Vision-Language Model provider. | `""` |
+| `--vlm_base_url` | str | Base URL for the VLM API endpoint. | `""` |
+| `--vlm_model_id` | str | Specific Model ID (e.g., qwen3-vl-32b-instruct). | `""` |
+| `--attn_raw_img` | str | (Viz Only) Path to the raw environment observation. | `""` |
+| `--attn_soma_img` | str | (Viz Only) Path to the SOMA-modified observation. | `""` |
+| `--attn_raw_task` | str | (Viz Only) Original base task description. | `""` |
+| `--attn_soma_task` | str | (Viz Only) Refined task description generated by SOMA. | `""` |
+
+## 9.Repository Structure
+```Plaintext
+SOMA/
+├── libero-modified/                  # Modified LIBERO simulation environment
+│   ├── bddl_files/libero_soma/       # BDDL task definitions for SOMA challenges
+│   │   ├── soma_chain_step_challenge.bddl
+│   │   ├── soma_distractor_challenge.bddl
+│   │   └── ... (other task variants)
+│   ├── benchmark/                    # Benchmark registration and task mapping
+│   │   ├── _init_.py                 # Init file to register LIBERO benchmarks
+│   │   ├── libero_suite_task_map.py  # Maps BDDL files to LIBERO benchmarks
+│   │   └── mu_creation.py            # Environment setup and asset creation
+│   ├── init_files/libero-soma/       # Pre-sampled initial states (.init) for tasks
+│   │   ├── soma_chain_step_challenge.init
+│   │   ├── soma_distractor_challenge.init
+│   │   └── ... (other task variants)
+│   └── sample_init_states.py         # Script to generate initial state files
+├── src/                              # Core SOMA Framework Source Code
+│   ├── outputs/                      
+│   ├── chain_step_eval.py            # Eval pipeline for multi-stage sequential tasks
+│   ├── image_attn_map.py             # Script for VLA attention weight visualization
+│   ├── RAG_ablation_study.py         # Script for testing memory bank impact
+│   ├── sam3_service.py               # Flask server hosting the SAM3 vision model
+│   ├── soma_agent.py                 # Unified facade for the SOMA cognitive agent
+│   ├── soma_control_flow.py          # State machine for Rollback/Encore/Decomposition
+│   ├── soma_encoder.py               # Multimodal embedding generator (CLIP + Text)
+│   ├── soma_eval.py                  # Primary evaluation entry point for SOMA
+│   ├── soma_logger.py                # Automated experience recording and diagnosis
+│   ├── soma_memory.py                # Persistent vector database for episodic memory
+│   ├── soma_perception.py            # Strategic orchestrator for VLM perception loop
+│   ├── soma_tools.py                 # Client for visual MCP tools (SAM3 HTTP calls)
+│   ├── soma_vlm.py                   # Client for Vision-Language Model reasoning
+│   └── test_sam3_mcp_tools.py        # Standalone verification for visual tools
+└── README.md                         # Project documentation and usage guide
