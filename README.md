@@ -203,7 +203,7 @@ python image_attn_map.py \
   --attn_soma_img "/path/to/modified.jpg" \
   --attn_raw_task "Pick up the bowl on the far right of the cross formation and place it on the plate." \
   --attn_soma_task "Pick up the green bowl and place it on the plate." \
-  --policy.path=path/to/pretrained_model \  
+  --policy.path=/path/to/pretrained_model \  
   --env.type=libero \   
   --env.task=libero_soma \  
   --eval.batch_size=1 \ 
@@ -239,7 +239,7 @@ TASK_CHAIN = [
 Run the evaluation with the following command. You can optionally enable the SOMA agent to provide perceptual interventions for each subtask:
 ```bash
 python eval_chain_step.py \
-  --policy.path=path/to/pretrained_model \
+  --policy.path=/path/to/pretrained_model \
   --env.type=libero \
   --env.task=libero_soma \
   --eval.batch_size=1 \
