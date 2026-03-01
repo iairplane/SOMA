@@ -112,7 +112,7 @@ def run_comprehensive_ablation(iterations=3):
     
     test_cases = {
         "1_visual_overlay": {
-            "image": "/mnt/disk1/shared_data/lzy/SOMA/src/experiment_step/visual/data/original.jpg",  
+            "image": "/path/to/SOMA/src/experiment_step/visual/data/original.jpg",  
             "task": "Pick up the red bowl in the center of the cross and place it on the plate.",   
             
             # --- Simulate Experience Bank 1：No RAG ---
@@ -150,7 +150,7 @@ def run_comprehensive_ablation(iterations=3):
         },
         
         "2_distractor_remove": {
-            "image": "/mnt/disk1/shared_data/lzy/SOMA/src/experiment_step/remove-distractor/data/original.jpg",  
+            "image": "/path/to/SOMA/src/experiment_step/remove-distractor/data/original.jpg",  
             "task": "Pick up the leftmost bowl and place it on the plate.",   
             
             "mock_no_rag": {
@@ -189,7 +189,7 @@ def run_comprehensive_ablation(iterations=3):
         },
         
         "3_noisy_prompt": {
-            "image": "/mnt/disk1/shared_data/lzy/SOMA/src/experiment_step/noisy-prompt/data/original.jpg",  
+            "image": "/path/to/SOMA/src/experiment_step/noisy-prompt/data/original.jpg",  
             "task": "Hey, umm... look down there. Can you grab that bottle? You know, the one for fries? Yeah, put it in the basket.",   
             
             "mock_no_rag": {
@@ -227,7 +227,7 @@ def run_comprehensive_ablation(iterations=3):
         },
         
         "4_long_task_subtask": {
-            "image": "/mnt/disk1/shared_data/lzy/SOMA/src/experiment_step/chain-step/data/original.jpg",  
+            "image": "/path/to/SOMA/src/experiment_step/chain-step/data/original.jpg",  
             "task": "Sort the items: milk and cream cheese to the basket, tomato sauce to the plate.",   
             
             "mock_no_rag": {
