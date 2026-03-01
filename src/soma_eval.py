@@ -741,9 +741,9 @@ def eval_main(cfg: EvalPipelineConfig):
     if enable_soma and SOMAAgent:
         logging.info("Initializing SOMA Agent...")
         # Retrieve VLM config from environment variables (set by our CLI parser)
-        vlm_api_key = os.environ.get("SOMA_VLM_API_KEY", "sk-c2649c021fd945c88ec8b11cdefebcb6")
-        vlm_base_url = os.environ.get("SOMA_VLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-        vlm_model_id = os.environ.get("SOMA_VLM_MODEL_ID", "qwen3-vl-32b-instruct")
+        vlm_api_key = os.environ.get("SOMA_VLM_API_KEY", "sk-xxxxx")
+        vlm_base_url = os.environ.get("SOMA_VLM_BASE_URL", "https://xxx.com/compatible-mode/v1")
+        vlm_model_id = os.environ.get("SOMA_VLM_MODEL_ID", "xxxxxx")
 
         soma_config = {
             "sam3_base_url": "http://127.0.0.1:5001",  # Point to your sam3_service address
