@@ -746,11 +746,9 @@ def eval_main(cfg: EvalPipelineConfig):
     soma_config = {
         "sam3_base_url": "http://127.0.0.1:5001",
         "memory_dir": str(Path(cfg.experience_dir) / "experience_db"),
-        # "vlm_api_key": "sk-dJ9PDHKGeP7xfsO4Zv7jNw", 
-        # "vlm_base_url": "https://models.sjtu.edu.cn/api/v1",
-        "vlm_api_key": "sk-c2649c021fd945c88ec8b11cdefebcb6",
-        "vlm_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model_id": "qwen3-vl-32b-instruct"
+        "vlm_api_key": "sk-xxxxx",
+        "vlm_base_url": "https://xxxxx.com/compatible-mode/v1",
+        "model_id": "xxxxx"
     }
     soma_agent = None
     if SOMAAgent:
