@@ -72,8 +72,8 @@ class Qwen3VLAPIClient:
     SOMA Brain: Responsible for interacting with the Vision-Language Model (e.g., Qwen3-VL / GPT-4o).
     """
     # Default configuration (will be overridden by init parameters)
-    DEFAULT_API_KEY = os.environ.get("VLM_API_KEY", "sk-c2649c021fd945c88ec8b11cdefebcb6")
-    DEFAULT_BASE_URL = os.environ.get("VLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    DEFAULT_API_KEY = os.environ.get("VLM_API_KEY", "sk-xxxxx")
+    DEFAULT_BASE_URL = os.environ.get("VLM_BASE_URL", "https://xxxx.com/compatible-mode/v1")
     # MODEL_ID = "qwen3vl"  # Adjust according to your API provider
     MODEL_ID = "qwen3-vl-32b-instruct"
 
