@@ -27,7 +27,7 @@ Copy the `libero_soma` tasks located in `bddl_files` and `init_files` into your 
 If you need to generate init states for new BDDL task files:
 ```bash
 python sample_init_states.py \
-  --bddl_file path/to/bddl_files/libero_soma/soma_xxx_challenge.bddl \
+  --bddl_file /path/to/bddl_files/libero_soma/soma_xxx_challenge.bddl \
   --save_path /path/to/init_files/libero_soma/soma_xxx_challenge.init
 ```
 
