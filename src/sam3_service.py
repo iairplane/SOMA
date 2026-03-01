@@ -338,7 +338,7 @@ def main() -> None:
     parser.add_argument(
         "--sam3_weight_path",
         type=str,
-        default="/mnt/disk1/shared_data/lzy/models/sam/sam3.pt",
+        default="/path/to/sam3/sam3.pt",
     )
     parser.add_argument("--vlm_base_url", default="https://models.sjtu.edu.cn/api/v1")
     parser.add_argument("--vlm_api_key", required=False, help="API Key for soma_vlm",default="sk-dJ9PDHKGeP7xfsO4Zv7jNw")
