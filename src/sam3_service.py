@@ -340,8 +340,8 @@ def main() -> None:
         type=str,
         default="/path/to/sam3/sam3.pt",
     )
-    parser.add_argument("--vlm_base_url", default="https://models.sjtu.edu.cn/api/v1")
-    parser.add_argument("--vlm_api_key", required=False, help="API Key for soma_vlm",default="sk-dJ9PDHKGeP7xfsO4Zv7jNw")
+    parser.add_argument("--vlm_base_url", default="https://xxxx/api/v1")
+    parser.add_argument("--vlm_api_key", required=False, help="API Key for soma_vlm",default="sk-xxxxx")
     
     args = parser.parse_args()
 
