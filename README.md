@@ -1,4 +1,4 @@
-# SOMA: Self-Organizing Memory Agent - Evaluation Guide
+# SOMA: Strategic Orchestration and Memory-Augmented Agentic System for Zero-Shot VLA Generalization - Evaluation Guide
 
 **SOMA** is a framework that decouples high-level Vision-Language Models (VLMs) from low-level continuous control policies. By utilizing a Client-Server (CS) architecture for heavy visual foundations (like SAM3), SOMA provides robotic agents with dynamic perceptual interventions, automatic rollback (Encore) mechanisms, and multi-stage task chaining capabilities—all while maintaining high-frequency execution in the primary control loop.
 
