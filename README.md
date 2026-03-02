@@ -1,4 +1,68 @@
-# SOMA: Strategic Orchestration and Memory-Augmented Agentic System for Zero-Shot VLA Generalization - Evaluation Guide
+<div align="center">
+  <h1>SOMA: Strategic Orchestration and Memory-Augmented Agentic System for Zero-Shot VLA Generalization</h1>
+  
+  <p>
+    <a href="https://your-paper-link.com"><img src="https://img.shields.io/badge/Paper-Arxiv%20Link-red.svg" alt="Paper"></a>
+    <a href="https://your-project-page.com"><img src="https://img.shields.io/badge/Website-Project%20Page-blue.svg" alt="Project Page"></a>
+    <a href="https://youtube.com/your-video"><img src="https://img.shields.io/badge/Video-Demo-red?logo=youtube" alt="Video"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  </p>
+
+  <p><i>Empowering pre-trained Vision-Language-Action (VLA) models with cognitive perception, episodic memory, and dynamic rollback capabilities—achieving zero-shot generalization without fine-tuning.</i></p>
+</div>
+
+<br/>
+
+## 🚀 Highlights & Demos
+
+### 🎥 SOMA in Action (Real-Time Control Flow & Visual Intervention)
+*Here, we demonstrate how SOMA intercepts ambiguous observations, dynamically removes distractors, and perfectly orchestrates a subtask chain without requiring VLA fine-tuning.*
+
+<div align="center">
+  <img src="./assets/soma_demo_main.gif" alt="SOMA Framework Demo" width="800"/>
+  <br/>
+  <p><sub><b>Figure 1:</b> SOMA dynamic perception and Encore rollback mechanism in the modified LIBERO environment.</sub></p>
+</div>
+
+### 📊 Zero-Shot Generalization Performance
+*Our extensive ablation studies show that the Dual Memory architecture (Success + Failure reasoning) radically improves the zero-shot success rate compared to the baseline VLA policy.*
+
+<div align="center">
+  <table style="width:100%; text-align:center;">
+    <tr>
+      <td width="50%">
+        <img src="./assets/success_rates_dataset3.png" alt="Real-time Success Rate Trend" width="100%"/>
+      </td>
+      <td width="50%">
+        <img src="./assets/success_rates_analysis.png" alt="Ablation Distribution" width="100%"/>
+      </td>
+    </tr>
+    <tr>
+      <td><b>Figure 2(a):</b> Real-time Success Trajectory across Ablations.</td>
+      <td><b>Figure 2(b):</b> Performance distribution showcasing SOMA's robustness.</td>
+    </tr>
+  </table>
+</div>
+
+<details>
+<summary><b>🔥 Click to see more Quantitative Results (Turns-to-Success)</b></summary>
+<br/>
+
+| Architecture | Interaction Cost (Avg Turns) | Fatal Error Rate | Final Success Rate |
+| :--- | :---: | :---: | :---: |
+| Baseline VLA (No Memory) | 6.0 | > 80% | 17.26% |
+| Failure Memory Only | 3.6 | ~ 15% | 74.24% |
+| **SOMA (Dual Memory)** | **1.0** | **0%** | **94.09%** |
+
+*SOMA significantly reduces the environmental interaction cost (Turns-to-Success) by providing surgical zero-shot visual interventions.*
+
+</details>
+
+<br/>
+
+---
+
+## 📖 Evaluation Guide
 
 **SOMA** is a framework that decouples high-level Vision-Language Models (VLMs) from low-level continuous control policies. By utilizing a Client-Server (CS) architecture for heavy visual foundations (like SAM3), SOMA provides robotic agents with dynamic perceptual interventions, automatic rollback (Encore) mechanisms, and multi-stage task chaining capabilities—all while maintaining high-frequency execution in the primary control loop.
 
