@@ -2,7 +2,7 @@
   <h1>SOMA: Strategic Orchestration and Memory-Augmented Agentic System for Zero-Shot VLA Generalization</h1>
   
   <p>
-    <a href="./docs/SOMA_paper.pdf"><img src="https://img.shields.io/badge/Paper-pdf%20-red.svg" alt="Paper"></a>
+    <a href="docs/SOMA_paper.pdf"><img src="https://img.shields.io/badge/Paper-pdf%20-red.svg" alt="Paper"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   </p>
 
@@ -17,7 +17,7 @@
 *Here, we demonstrate how SOMA preceive visual imput and retrival historical experience to handle iamge/task prompt without requiring VLA fine-tuning, leading to a higher success rate.*
 
 <div align="center">
-  <img src="./docs/framework.png" alt="SOMA Framework" width="800"/>
+  <img src="docs/framework.png" alt="SOMA Framework" width="800"/>
   <br/>
   <p><sub><b>Figure 1:</b> SOMA Framework.</sub></p>
 </div>
@@ -37,16 +37,16 @@
     <tr>
       <td><b>Visual Overlay</b></td>
       <td><i>"Pick the red bowl from center of the cross formation and place it on the plate"</i></td>
-      <td><img src="./docs/visual/original.jpg" alt="Origin" width="100%"/></td>
-      <td><img src="./docs/visual/modified.jpg" alt="Modified" width="100%"/></td>
-      <td><video src="./docs/visual/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
+      <td><img src="docs/visual/original.jpg" alt="Origin" width="100%"/></td>
+      <td><img src="docs/visual/modified.jpg" alt="Modified" width="100%"/></td>
+      <td><video src="docs/visual/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
     <tr>
       <td><b>Distractor Remove</b></td>
       <td><i>"Pick the black bowl from left of the cross formation and place it on the plate"</i></td>
-      <td><img src="./docs/distractor/original.jpg" alt="Origin" width="100%"/></td>
-      <td><img src="./docs/distractor/modified.jpg" alt="Modified" width="100%"/></td>
-      <td><video src="./docs/distractor/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
+      <td><img src="docs/distractor/original.jpg" alt="Origin" width="100%"/></td>
+      <td><img src="docs/distractor/modified.jpg" alt="Modified" width="100%"/></td>
+      <td><video src="docs/distractor/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
   </table>
   <table style="width:100%; text-align:center; vertical-align: middle;">
@@ -61,8 +61,8 @@
       <td><b>Prompt Simplify</b></td>
       <td><i>"Hey, umm... look down there. Can you grab that bottle? You know, the one for fries? Yeah, put it in the basket."</i></td>
       <td><i>"Pick the red sauce bottle and place it in the basket"</i></td>
-      <td><img src="./docs/noisy-prompt/original.jpg" alt="Origin" width="100%"/></td>
-      <td><video src="./docs/noisy-prompt/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
+      <td><img src="docs/noisy-prompt/original.jpg" alt="Origin" width="100%"/></td>
+      <td><video src="docs/noisy-prompt/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
     <tr>
       <td><b>Task Decompose</b></td>
@@ -71,8 +71,8 @@
         <b>[SubTask-1]</b> <i>"Pick the milk and place it in the basket."</i><br/>
         <b>[SubTask-2]</b> <i>"Pick the cream cheese and place it in the basket."</i>
       </td>
-      <td><img src="./docs/long-task/original.jpg" alt="Origin" width="100%"/></td>
-      <td><video src="./docs/long-task/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
+      <td><img src="docs/long-task/original.jpg" alt="Origin" width="100%"/></td>
+      <td><video src="docs/long-task/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
   </table>
 </div>
@@ -84,7 +84,7 @@
 Here is our LIBERO-SOMA Benchmark results after testing on Smolvla/Pi0/Pi05 models.
 
 <div align="center">
-  <img src="./docs/experiment_result.png" alt="Experiment Results Chart" width="100%"/>
+  <img src="docs/experiment_result.png" alt="Experiment Results Chart" width="100%"/>
 </div>
 <br/>
 
