@@ -2,59 +2,71 @@
   <h1>SOMA: Strategic Orchestration and Memory-Augmented Agentic System for Zero-Shot VLA Generalization</h1>
   
   <p>
-    <a href="https://your-paper-link.com"><img src="https://img.shields.io/badge/Paper-Arxiv%20Link-red.svg" alt="Paper"></a>
-    <a href="https://your-project-page.com"><img src="https://img.shields.io/badge/Website-Project%20Page-blue.svg" alt="Project Page"></a>
-    <a href="https://youtube.com/your-video"><img src="https://img.shields.io/badge/Video-Demo-red?logo=youtube" alt="Video"></a>
+    <a href="./docs/SOMA_paper.pdf"><img src="https://img.shields.io/badge/Paper-pdf%20-red.svg" alt="Paper"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   </p>
 
-  <p><i>Empowering pre-trained Vision-Language-Action (VLA) models with cognitive perception, episodic memory, and dynamic rollback capabilities—achieving zero-shot generalization without fine-tuning.</i></p>
+  <p><i>Empowering pre-trained Vision-Language-Action (VLA) models with cognitive perception, dual-memory, and dynamic MCP tool chains—achieving zero-shot generalization without fine-tuning.</i></p>
 </div>
 
 <br/>
 
 ## 🚀 Highlights & Demos
 
-### 🎥 SOMA in Action (Real-Time Control Flow & Visual Intervention)
-*Here, we demonstrate how SOMA intercepts ambiguous observations, dynamically removes distractors, and perfectly orchestrates a subtask chain without requiring VLA fine-tuning.*
+### 🎥 SOMA FrameWork (VLM RAG & Visual Intervention)
+*Here, we demonstrate how SOMA preceive visual imput and retrival historical experience to handle iamge/task prompt without requiring VLA fine-tuning, leading to a higher success rate.*
 
 <div align="center">
-  <img src="./assets/soma_demo_main.gif" alt="SOMA Framework Demo" width="800"/>
+  <img src="./docs/framework.png" alt="SOMA Framework" width="800"/>
   <br/>
-  <p><sub><b>Figure 1:</b> SOMA dynamic perception and Encore rollback mechanism in the modified LIBERO environment.</sub></p>
+  <p><sub><b>Figure 1:</b> SOMA Framework.</sub></p>
 </div>
 
 ### 📊 Zero-Shot Generalization Performance
-*Our extensive ablation studies show that the Dual Memory architecture (Success + Failure reasoning) radically improves the zero-shot success rate compared to the baseline VLA policy.*
+*Our Experiments are based on LIBERO Benchmark, we modified LIBERO to create our own benchmark named LIBERO-SOMA to test our SOMA with the baseline VLA policy compared to frozen VLA policy.*
 
 <div align="center">
-  <table style="width:100%; text-align:center;">
+  <table style="width:100%; text-align:center; vertical-align: middle;">
     <tr>
-      <td width="50%">
-        <img src="./assets/success_rates_dataset3.png" alt="Real-time Success Rate Trend" width="100%"/>
-      </td>
-      <td width="50%">
-        <img src="./assets/success_rates_analysis.png" alt="Ablation Distribution" width="100%"/>
-      </td>
+      <th width="25%">🗣️ Task Prompt</th>
+      <th width="25%">🖼️ Origin Image</th>
+      <th width="25%">🛠️ Modified Image</th>
+      <th width="25%">🎬 Success Output</th>
     </tr>
     <tr>
-      <td><b>Figure 2(a):</b> Real-time Success Trajectory across Ablations.</td>
-      <td><b>Figure 2(b):</b> Performance distribution showcasing SOMA's robustness.</td>
+      <td><i>"Pick the red bowl from center of the cross formation and place it on the plate"</i></td>
+      <td><img src="./docs/visual/original.jpg" alt="Origin" width="100%"/></td>
+      <td><img src="./docs/visual/modified.jpg" alt="Modified" width="100%"/></td>
+      <td><video src="./docs/visual/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
+    </tr>
+    <tr>
+      <td><i>"Pick the black bowl from left of the cross formation and place it on the plate"</i></td>
+      <td><img src="./docs/distractor/original.jpg" alt="Origin" width="100%"/></td>
+      <td><img src="./docs/distractor/modified.jpg" alt="Modified" width="100%"/></td>
+      <td><video src="./docs/distractor/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
   </table>
 </div>
 
 <details>
-<summary><b>🔥 Click to see more Quantitative Results (Turns-to-Success)</b></summary>
+<summary><b>🔥 Click to see more Experiment Results</b></summary>
 <br/>
 
-| Architecture | Interaction Cost (Avg Turns) | Fatal Error Rate | Final Success Rate |
-| :--- | :---: | :---: | :---: |
-| Baseline VLA (No Memory) | 6.0 | > 80% | 17.26% |
-| Failure Memory Only | 3.6 | ~ 15% | 74.24% |
-| **SOMA (Dual Memory)** | **1.0** | **0%** | **94.09%** |
+Here is our LIBERO-SOMA Benchmark results after testing on Smolvla/Pi0/Pi05 models.
 
-*SOMA significantly reduces the environmental interaction cost (Turns-to-Success) by providing surgical zero-shot visual interventions.*
+<div align="center">
+  <img src="./docs/experiment_result.png" alt="Experiment Results Chart" width="100%"/>
+</div>
+<br/>
+
+| Architecture | Interaction Cost (Avg Turns)| Final VLM Score After First turn |
+| :--- | :---: | :---: |
+| No Memory | 7.4 | 60 |
+| Failure Memory Only | 7.33 | 73.75 |
+| Success Memory Only | 1.47 | 91.071 |
+| **SOMA (Dual Memory)** | **1.07** | **96.3** |
+
+*SOMA significantly reduces the environmental interaction cost (Turns-to-Success) by dual-memory experience to provide MCP tools.*
 
 </details>
 
