@@ -28,22 +28,51 @@
 <div align="center">
   <table style="width:100%; text-align:center; vertical-align: middle;">
     <tr>
-      <th width="25%">🗣️ Task Prompt</th>
-      <th width="25%">🖼️ Origin Image</th>
-      <th width="25%">🛠️ Modified Image</th>
-      <th width="25%">🎬 Success Output</th>
+      <th width="12%">🧰 MCP Tool</th>
+      <th width="22%">🗣️ Task Prompt</th>
+      <th width="22%">🖼️ Origin Image</th>
+      <th width="22%">🛠️ Modified Image</th>
+      <th width="22%">🎬 Success Output</th>
     </tr>
     <tr>
+      <td><b>Visual Overlay</b></td>
       <td><i>"Pick the red bowl from center of the cross formation and place it on the plate"</i></td>
       <td><img src="./docs/visual/original.jpg" alt="Origin" width="100%"/></td>
       <td><img src="./docs/visual/modified.jpg" alt="Modified" width="100%"/></td>
       <td><video src="./docs/visual/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
     <tr>
+      <td><b>Distractor Remove</b></td>
       <td><i>"Pick the black bowl from left of the cross formation and place it on the plate"</i></td>
       <td><img src="./docs/distractor/original.jpg" alt="Origin" width="100%"/></td>
       <td><img src="./docs/distractor/modified.jpg" alt="Modified" width="100%"/></td>
       <td><video src="./docs/distractor/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
+    </tr>
+  </table>
+  <table style="width:100%; text-align:center; vertical-align: middle;">
+    <tr>
+      <th width="12%">🧰 MCP Tool</th>
+      <th width="22%">🗣️ Task Prompt</th>
+      <th width="22%">🛠️ Modified Prompt</th>
+      <th width="22%">🖼️ Origin Image</th>
+      <th width="22%">🎬 Success Output</th>
+    </tr>
+    <tr>
+      <td><b>Prompt Simplify</b></td>
+      <td><i>"Hey, umm... look down there. Can you grab that bottle? You know, the one for fries? Yeah, put it in the basket."</i></td>
+      <td><i>"Pick the red sauce bottle and place it in the basket"</i></td>
+      <td><img src="./docs/noisy-prompt/original.jpg" alt="Origin" width="100%"/></td>
+      <td><video src="./docs/noisy-prompt/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
+    </tr>
+    <tr>
+      <td><b>Task Decompose</b></td>
+      <td><i>"Sort the items: milk and cream cheese into the basket"</i></td>
+      <td align="left">
+        <b>[SubTask-1]</b> <i>"Pick the milk and place it in the basket."</i><br/>
+        <b>[SubTask-2]</b> <i>"Pick the cream cheese and place it in the basket."</i>
+      </td>
+      <td><img src="./docs/long-task/original.jpg" alt="Origin" width="100%"/></td>
+      <td><video src="./docs/long-task/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
   </table>
 </div>
@@ -58,6 +87,15 @@ Here is our LIBERO-SOMA Benchmark results after testing on Smolvla/Pi0/Pi05 mode
   <img src="./docs/experiment_result.png" alt="Experiment Results Chart" width="100%"/>
 </div>
 <br/>
+
+| Challenge Type | No RAG  | Limit RAG | **SOMA(Rich RAG)** |
+| :--- | :---: | :---: | :---: |
+| Visual | 53 | 69 | 93 |
+| Distractor | 51.4 | 93 | 94| 
+| Noisy Prompt | 49.4 | 69.8 | 95 |
+| Long-Horizon Task| 44.6 | 87.8 | 97.4|
+
+SOMA leverages multi-turn self-reflection RAG to achieve robust generalization, consistently scoring above 93 across all challenge types. Compared to single-turn RAG, this iterative reasoning mechanism effectively resolves Visual ambiguities (+24) and Noisy Prompts (+25.2), while ensuring near-perfect stability (97.4) in Long-Horizon tasks.
 
 | Architecture | Interaction Cost (Avg Turns)| Final VLM Score After First turn |
 | :--- | :---: | :---: |
