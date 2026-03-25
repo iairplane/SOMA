@@ -40,14 +40,14 @@
       <td><i>"Pick the red bowl from center of the cross formation and place it on the plate"</i></td>
       <td><img src="docs/visual/original.jpg" alt="Origin" width="100%"/></td>
       <td><img src="docs/visual/modified.jpg" alt="Modified" width="100%"/></td>
-      <td><video src="docs/visual/success.gif" width="100%" autoplay loop muted playsinline></video></td>
+      <td><video src="docs/visual/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
     <tr>
       <td><b>Distractor Remove</b></td>
       <td><i>"Pick the black bowl from left of the cross formation and place it on the plate"</i></td>
       <td><img src="docs/distractor/original.jpg" alt="Origin" width="100%"/></td>
       <td><img src="docs/distractor/modified.jpg" alt="Modified" width="100%"/></td>
-      <td><video src="docs/distractor/success.gif" width="100%" autoplay loop muted playsinline></video></td>
+      <td><video src="docs/distractor/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
   </table>
   <table style="width:100%; text-align:center; vertical-align: middle;">
@@ -63,7 +63,7 @@
       <td><i>"Hey, umm... look down there. Can you grab that bottle? You know, the one for fries? Yeah, put it in the basket."</i></td>
       <td><i>"Pick the red sauce bottle and place it in the basket"</i></td>
       <td><img src="docs/noisy-prompt/original.jpg" alt="Origin" width="100%"/></td>
-      <td><video src="docs/noisy-prompt/success.gif" width="100%" autoplay loop muted playsinline></video></td>
+      <td><video src="docs/noisy-prompt/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
     <tr>
       <td><b>Task Decompose</b></td>
@@ -73,7 +73,7 @@
         <b>[SubTask-2]</b> <i>"Pick the cream cheese and place it in the basket."</i>
       </td>
       <td><img src="docs/long-task/original.jpg" alt="Origin" width="100%"/></td>
-      <td><video src="docs/long-task/success.gif" width="100%" autoplay loop muted playsinline></video></td>
+      <td><video src="docs/long-task/success.mp4" width="100%" autoplay loop muted playsinline></video></td>
     </tr>
   </table>
 </div>
