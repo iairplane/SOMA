@@ -1,12 +1,13 @@
 <div align="center">
-  <h1>SOMA: Strategic Orchestration and Memory-Augmented Agentic System for Zero-Shot VLA Generalization</h1>
+  <h1>SOMA: Strategic Orchestration and Memory-Augmented System for Vision-Language-Action Model Robustness via In-Context Adaptation</h1>
   
   <p>
     <a href="docs/SOMA_paper.pdf"><img src="https://img.shields.io/badge/Paper-pdf%20-red.svg" alt="Paper"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   </p>
 
-  <p><i>Empowering pre-trained Vision-Language-Action (VLA) models with cognitive perception, dual-memory, and dynamic MCP tool chains—achieving zero-shot generalization without fine-tuning.</i></p>
+  <p><i>SOMA upgrades frozen Vision-Language-Action (VLA) policies for robust in-context adaptation without parameter fine-tuning, via contrastive Dual-Memory RAG, an attribution-driven LLM orchestrator, dynamic MCP interventions, and offline memory consolidation.</i></p>
+  <p><i>Across <b>LIBERO-PRO</b> and <b>LIBERO-SOMA</b>, SOMA delivers an average absolute success-rate gain of <b>56.6%</b>, including a <b>89.1%</b> absolute improvement on long-horizon task chaining.</i></p>
 </div>
 
 <br/>
@@ -17,7 +18,7 @@
 *Here, we demonstrate how SOMA preceive visual imput and retrival historical experience to handle iamge/task prompt without requiring VLA fine-tuning, leading to a higher success rate.*
 
 <div align="center">
-  <img src="docs/framework.png" alt="SOMA Framework" width="800"/>
+  <img src="docs/framework.jpg" alt="SOMA Framework" width="800"/>
   <br/>
   <p><sub><b>Figure 1:</b> SOMA Framework.</sub></p>
 </div>
@@ -81,32 +82,190 @@
 <summary><b>🔥 Click to see more Experiment Results</b></summary>
 <br/>
 
-Here is our LIBERO-SOMA Benchmark results after testing on Smolvla/Pi0/Pi05 models.
-
 <div align="center">
-  <img src="docs/experiment_result.png" alt="Experiment Results Chart" width="100%"/>
+  <sub>
+    <b>Benchmark Scope</b>:
+    <code>LIBERO-SOMA + LIBERO-PRO</code>
+    <code>Backbones: π₀, π₀.₅, SmolVLA</code>
+    <code>Zero-shot In-Context Adaptation</code>
+  </sub><br/>
+  <sub>
+    <b>Tags</b>: 
+    <code>OOD-Generalization</code> 
+    <code>Dual-Memory RAG</code> 
+    <code>Tool-Orchestrated Adaptation</code>
+  </sub>
 </div>
+
 <br/>
 
-| Challenge Type | No RAG  | Limit RAG | **SOMA(Rich RAG)** |
-| :--- | :---: | :---: | :---: |
-| Visual | 53 | 69 | 93 |
-| Distractor | 51.4 | 93 | 94| 
-| Noisy Prompt | 49.4 | 69.8 | 95 |
-| Long-Horizon Task| 44.6 | 87.8 | 97.4|
+<div style="overflow-x:auto; border:1px solid #d0d7de; border-radius:12px; padding:10px;">
+<table>
+  <thead>
+    <tr>
+      <th>Quick Glance KPI</th>
+      <th>Baseline</th>
+      <th>SOMA</th>
+      <th>Gain</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>LIBERO-PRO Avg (Pos)</td><td>2.33%</td><td><b>57.2%</b></td><td><b>+54.87%</b></td></tr>
+    <tr><td>LIBERO-PRO Avg (Task)</td><td>0.86%</td><td><b>55.2%</b></td><td><b>+54.34%</b></td></tr>
+    <tr><td>Dual-Memory Avg Turns</td><td>7.40 (No Memory)</td><td><b>1.07</b></td><td><b>-85.5%</b></td></tr>
+  </tbody>
+</table>
+</div>
 
-SOMA leverages multi-turn self-reflection RAG to achieve robust generalization, consistently scoring above 93 across all challenge types. Compared to single-turn RAG, this iterative reasoning mechanism effectively resolves Visual ambiguities (+24) and Noisy Prompts (+25.2), while ensuring near-perfect stability (97.4) in Long-Horizon tasks.
+<br/>
 
-| Architecture | Interaction Cost (Avg Turns)| Final VLM Score After First turn |
-| :--- | :---: | :---: |
-| No Memory | 7.4 | 60 |
-| Failure Memory Only | 7.33 | 73.75 |
-| Success Memory Only | 1.47 | 91.071 |
-| **SOMA (Dual Memory)** | **1.07** | **96.3** |
+### 📊 LIBERO-SOMA (OOD Challenge Suite)
 
-*SOMA significantly reduces the environmental interaction cost (Turns-to-Success) by dual-memory experience to provide MCP tools.*
+<div align="center">
+  <img src="docs/result.png" alt="LIBERO-SOMA Results" width="90%" style="border:1px solid #d0d7de; border-radius:12px; box-shadow:0 6px 18px rgba(31,35,40,0.12);"/>
+  <br/>
+  <sub><b>Figure:</b> Main performance comparison across visual, linguistic, and long-horizon OOD challenges.</sub>
+</div>
+
+<p>
+<b>SOMA consistently reduces sensitivity to sensory noise, linguistic ambiguity, execution instability, and long-horizon error accumulation</b>, restoring robust performance across major OOD failure modes.
+</p>
+
+<br/>
+
+### 📊 LIBERO-PRO (Position / Task Shifts, π₀.₅)
+
+<div style="overflow-x:auto; border:1px solid #d0d7de; border-radius:12px; padding:8px;">
+<table>
+  <thead>
+    <tr>
+      <th colspan="4" align="left"><b>LIBERO-PRO (Pos)</b></th>
+    </tr>
+    <tr>
+      <th>Category</th>
+      <th>Task (Symbolic Form)</th>
+      <th>π₀.₅ BASE</th>
+      <th>w/ SOMA</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Spat.</td><td>P.(btw(p, r), pl.)</td><td>2%</td><td><b>63.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(center, pl.)</td><td>0%</td><td><b>97.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(drw_top(cab_w), pl.)</td><td>0%</td><td><b>20.2%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(next_to(p), pl.)</td><td>0%</td><td><b>57.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(next_to(r), pl.)</td><td>12%</td><td><b>71.0%</b></td></tr>
+    <tr><td>Obj.</td><td>P.(soup, bskt.)</td><td>0%</td><td><b>35.0%</b></td></tr>
+    <tr><td><b>Average (Pos)</b></td><td>—</td><td>2.33%</td><td><b>57.2%</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+<br/>
+
+<div style="overflow-x:auto; border:1px solid #d0d7de; border-radius:12px; padding:8px;">
+<table>
+  <thead>
+    <tr>
+      <th colspan="4" align="left"><b>LIBERO-PRO (Task)</b></th>
+    </tr>
+    <tr>
+      <th>Category</th>
+      <th>Task (Symbolic Form)</th>
+      <th>π₀.₅ BASE</th>
+      <th>w/ SOMA</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Spat.</td><td>P.(btw(p, r), pl.)</td><td>0%</td><td><b>78.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(center, pl.)</td><td>2%</td><td><b>82.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(next_to(ck.), pl.)</td><td>2%</td><td><b>97.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(next_to(p), pl.)</td><td>0%</td><td><b>73.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(next_to(r), pl.)</td><td>2%</td><td><b>98.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(on(ck.), pl.)</td><td>0%</td><td><b>12.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(on(r), pl.)</td><td>2%</td><td><b>100.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(on(stove), pl.)</td><td>0%</td><td><b>13.0%</b></td></tr>
+    <tr><td>Spat.</td><td>P.(on(cab_w), pl.)</td><td>0%</td><td><b>95.0%</b></td></tr>
+    <tr><td>Obj.</td><td>P.(soup, bskt.)</td><td>0%</td><td><b>16.0%</b></td></tr>
+    <tr><td>Obj.</td><td>P.(bbq, bskt.)</td><td>2%</td><td><b>32.0%</b></td></tr>
+    <tr><td>Obj.</td><td>P.(juice, bskt.)</td><td>2%</td><td><b>41.0%</b></td></tr>
+    <tr><td>Obj.</td><td>P.(dressing, bskt.)</td><td>0%</td><td><b>13.0%</b></td></tr>
+    <tr><td>Obj.</td><td>P.(tomato, bskt.)</td><td>0%</td><td><b>23.0%</b></td></tr>
+    <tr><td><b>Average (Task)</b></td><td>—</td><td>0.86%</td><td><b>55.2%</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+<b>SOMA substantially improves spatial grounding and compositional generalization under layout and semantic shifts</b>, lifting near-zero baseline performance to strong OOD robustness without fine-tuning.
+</p>
+
+<hr/>
+
+### 🔍 Ablation Study
+
+#### 🧠 Dual-Memory Ablation (Reasoning Efficiency)
+
+<div align="center">
+  <img src="docs/ablation_dual_memory.png" alt="Dual-Memory Ablation" width="70%" style="border:1px solid #d0d7de; border-radius:12px; box-shadow:0 6px 18px rgba(31,35,40,0.12);"/>
+</div>
+
+<div style="overflow-x:auto; border:1px solid #d0d7de; border-radius:12px; padding:8px;">
+
+<table>
+  <thead>
+    <tr>
+      <th>Memory Setting</th>
+      <th>Avg. Turns-to-Success</th>
+      <th>First-Turn Score</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>No Memory</td><td>7.40</td><td>60.0</td></tr>
+    <tr><td>Failure Only</td><td>7.33</td><td>73.75</td></tr>
+    <tr><td>Success Only</td><td>1.47</td><td>91.07</td></tr>
+    <tr><td><b>SOMA (Dual)</b></td><td><b>1.07</b></td><td><b>96.3</b></td></tr>
+  </tbody>
+</table>
+
+</div>
+
+<p>
+<b>Dual-memory retrieval (success + failure) provides stable, low-cost intervention planning</b>, minimizing reasoning rounds while maximizing first-turn decision reliability.
+</p>
+
+<br/>
+
+#### 🧩 Dual-Stage Memory Consolidation (RAG Richness)
+
+<div align="center">
+  <img src="docs/ablation2.png" alt="Reasoning Depth Scores" width="65%" style="border:1px solid #d0d7de; border-radius:12px; box-shadow:0 6px 18px rgba(31,35,40,0.12);"/>
+</div>
+
+<div style="overflow-x:auto; border:1px solid #d0d7de; border-radius:12px; padding:8px;">
+
+<table>
+  <thead>
+    <tr>
+      <th>RAG Config</th>
+      <th>Key Reasoning & Actions</th>
+      <th>Success Rate</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>No-RAG</td><td>Ambiguous ID, shadow errors, simple highlighting</td><td>19.2%</td></tr>
+    <tr><td>Limited-RAG</td><td>Failure guidance + redundant background replacement</td><td>48.8%</td></tr>
+    <tr><td><b>Rich-RAG (SOMA)</b></td><td><b>Precise failure-aware distractor removal, clean strategy</b></td><td><b>60.1%</b></td></tr>
+  </tbody>
+</table>
+
+</div>
+
+<p>
+<b>Rich RAG (SOMA’s dual-stage consolidation) delivers sharper causal reasoning, shorter tool chains, and higher success</b> than No-RAG / Limited-RAG baselines.
+</p>
 
 </details>
+
 
 <br/>
 
