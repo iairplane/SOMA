@@ -587,27 +587,52 @@ SOMA/
 │   ├── soma_vlm.py                   # Client for Vision-Language Model reasoning
 │   └── test_sam3_mcp_tools.py        # Standalone verification for visual tools
 └── README.md                         # Project documentation and usage guide
+```
+---
+
+
+
+
+# Acknowledgements
+
+This repository builds upon and extends the excellent open-source ecosystems of **LIBERO-PRO** and **LeRobot**.  
+We sincerely thank the original authors and maintainers for their foundational contributions.
+
+- **LIBERO-PRO**: robust and fair evaluation beyond memorization for VLA models.  
+- **LeRobot**: open-source infrastructure for end-to-end robot learning.
 
 ---
 
 # Citation
-If you use SOMA in your research, please cite both **SOMA** and **LIBERO-PRO**:
+
+If you find this repository useful, please cite **SOMA** and the upstream projects below:
+
 ```bibtex
-@article{zhou2025liberopro,
+@misc{zhou2025liberoprorobustfairevaluation,
   title={LIBERO-PRO: Towards Robust and Fair Evaluation of Vision-Language-Action Models Beyond Memorization},
   author={Xueyang Zhou and Yangming Xu and Guiyao Tie and Yongchao Chen and Guowen Zhang and Duanfeng Chu and Pan Zhou and Lichao Sun},
-  journal={[arXiv preprint arXiv:2510.03827]},
   year={2025},
-  publisher={[Publisher]} / eprint={[arXiv ID]}
+  eprint={2510.03827},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV},
+  url={https://arxiv.org/abs/2510.03827}
+}
+
+@inproceedings{cadenelerobot,
+  title={LeRobot: An Open-Source Library for End-to-End Robot Learning},
+  author={Cadene, Remi and Alibert, Simon and Capuano, Francesco and Aractingi, Michel and Zouitine, Adil and Kooijmans, Pepijn and Choghari, Jade and Russi, Martino and Pascal, Caroline and Palma, Steven and Shukor, Mustafa and Moss, Jess and Soare, Alexander and Aubakirova, Dana and Lhoest, Quentin and Gallou{'}edec, Quentin and Wolf, Thomas},
+  booktitle={The Fourteenth International Conference on Learning Representations},
+  year={2026},
+  url={https://arxiv.org/abs/2602.22818}
 }
 ```
 
 ---
 
-# License
+<!-- # License
 
-| Component        | License                                                                                                                             |
-|------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| Codebase         | [MIT License](LICENSE)                                                                                                              |
+| Component | License |
+|---|---|
+| Codebase | [MIT License](LICENSE) |
 
----
+--- -->
